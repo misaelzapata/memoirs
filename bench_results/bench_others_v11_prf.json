@@ -1,0 +1,3571 @@
+{
+  "suite": "retrieval-only",
+  "top_k": 10,
+  "n_engines": 6,
+  "n_engines_ok": 6,
+  "engines": [
+    {
+      "engine": "memoirs",
+      "status": "OK",
+      "n_cases": 20,
+      "queries": [
+        {
+          "query": "what is my favorite dinner recipe?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_lasagna"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_lasagna",
+            "mem_dist_33",
+            "mem_dist_43",
+            "mem_t_drink_new",
+            "mem_sh_allergy",
+            "mem_t_lead_new",
+            "mem_mh_rivendell_stack",
+            "mem_sh_birthday",
+            "mem_sh_passport",
+            "mem_mh_apollo_owner"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 28.317430998868076
+        },
+        {
+          "query": "when is my dentist appointment at SmileBright?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_dentist"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_dentist",
+            "mem_dist_24",
+            "mem_dist_26",
+            "mem_dist_38",
+            "mem_sh_passport",
+            "mem_dist_23",
+            "mem_dist_39",
+            "mem_dist_33",
+            "mem_sh_mortgage",
+            "mem_t_title_new"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 20.971730000383104
+        },
+        {
+          "query": "which marathon did I sign up for?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_marathon"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_marathon",
+            "mem_dist_42",
+            "mem_sh_dentist",
+            "mem_sh_birthday",
+            "mem_dist_40",
+            "mem_t_lead_new",
+            "mem_dist_37",
+            "mem_dist_49",
+            "mem_dist_41",
+            "mem_dist_00"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 22.21859199926257
+        },
+        {
+          "query": "what does the canary-bench project measure?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_canary"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_canary",
+            "mem_t_lead_new",
+            "mem_dist_20",
+            "mem_mh_apollo_owner",
+            "mem_dist_27",
+            "mem_mh_alice_lead",
+            "mem_mh_rivendell_join",
+            "mem_mh_rivendell_stack",
+            "mem_mh_carla_design",
+            "mem_dist_24"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 29.470306000803248
+        },
+        {
+          "query": "what is my passport number?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_passport"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_passport",
+            "mem_t_city_new",
+            "mem_sh_mortgage",
+            "mem_sh_birthday",
+            "mem_mh_study_drug",
+            "mem_t_title_new",
+            "mem_dist_29",
+            "mem_sh_allergy",
+            "mem_mh_rivendell_stack",
+            "mem_mh_apollo_owner"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 18.387494999842602
+        },
+        {
+          "query": "when is my mother's birthday?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_birthday"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_birthday",
+            "mem_dist_40",
+            "mem_dist_48",
+            "mem_sh_passport",
+            "mem_dist_41",
+            "mem_dist_29",
+            "mem_sh_lasagna",
+            "mem_mh_alice_lead",
+            "mem_t_lead_new",
+            "mem_dist_33"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 21.31760900010704
+        },
+        {
+          "query": "how much is my monthly mortgage payment?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_mortgage"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_mortgage",
+            "mem_sh_canary",
+            "mem_dist_29",
+            "mem_sh_allergy",
+            "mem_t_title_new",
+            "mem_sh_lasagna",
+            "mem_dist_33",
+            "mem_sh_passport",
+            "mem_mh_apollo_owner",
+            "mem_t_lead_new"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 16.850137000801624
+        },
+        {
+          "query": "what foods am I allergic to?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_allergy"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_allergy",
+            "mem_sh_lasagna",
+            "mem_dist_33",
+            "mem_dist_38",
+            "mem_dist_43",
+            "mem_pref_keyboard",
+            "mem_pref_meeting",
+            "mem_dist_31",
+            "mem_sh_mortgage",
+            "mem_mh_design_figma"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 20.05894600006286
+        },
+        {
+          "query": "when is alice's team's bigtable migration due?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_alice_lead",
+            "mem_mh_storage_deadline"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_storage_deadline",
+            "mem_mh_alice_lead",
+            "mem_mh_bob_growth",
+            "mem_mh_design_figma",
+            "mem_t_lead_new",
+            "mem_mh_carla_design",
+            "mem_mh_growth_tokyo",
+            "mem_mh_rivendell_stack",
+            "mem_mh_apollo_owner",
+            "mem_t_title_new"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 16.76997699905769
+        },
+        {
+          "query": "what is the stack of the project I joined as principal engineer?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_rivendell_join",
+            "mem_mh_rivendell_stack"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_rivendell_join",
+            "mem_t_title_new",
+            "mem_mh_apollo_owner",
+            "mem_mh_growth_tokyo",
+            "mem_t_lead_new",
+            "mem_mh_rivendell_stack",
+            "mem_mh_bob_growth",
+            "mem_mh_alice_lead",
+            "mem_sh_canary",
+            "mem_t_city_new"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 16.666991999954917
+        },
+        {
+          "query": "where is the team bob runs based?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo",
+            "mem_mh_apollo_oncall",
+            "mem_mh_alice_lead",
+            "mem_dist_36",
+            "mem_mh_storage_deadline",
+            "mem_mh_apollo_owner",
+            "mem_mh_carla_design",
+            "mem_mh_design_figma",
+            "mem_t_lead_new"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 19.261116000052425
+        },
+        {
+          "query": "what trial phase is dr. mendes' molecule in?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_study_drug",
+            "mem_mh_study_phase"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_study_drug",
+            "mem_mh_study_phase",
+            "mem_t_lead_new",
+            "mem_sh_dentist",
+            "mem_mh_apollo_owner",
+            "mem_mh_rivendell_join",
+            "mem_mh_apollo_oncall",
+            "mem_dist_29",
+            "mem_sh_passport",
+            "mem_mh_bob_growth"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 14.512214000205859
+        },
+        {
+          "query": "which design tool did carla's team migrate to?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_carla_design",
+            "mem_mh_design_figma"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_carla_design",
+            "mem_t_lead_new",
+            "mem_mh_design_figma",
+            "mem_mh_alice_lead",
+            "mem_mh_growth_tokyo",
+            "mem_mh_bob_growth",
+            "mem_dist_24",
+            "mem_mh_storage_deadline",
+            "mem_dist_31",
+            "mem_sh_allergy"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 21.956018999844673
+        },
+        {
+          "query": "how does the team that owns project apollo handle on-call?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_apollo_owner",
+            "mem_mh_apollo_oncall"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_apollo_owner",
+            "mem_mh_apollo_oncall",
+            "mem_mh_carla_design",
+            "mem_mh_rivendell_join",
+            "mem_t_lead_new",
+            "mem_mh_alice_lead",
+            "mem_sh_canary",
+            "mem_mh_growth_tokyo",
+            "mem_mh_rivendell_stack",
+            "mem_mh_storage_deadline"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 26.13658300106181
+        },
+        {
+          "query": "what does the user prefer to drink in the afternoon?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_drink_old"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_drink_old",
+            "mem_t_title_old",
+            "mem_t_city_old",
+            "mem_t_lead_old"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 22.498257998449844
+        },
+        {
+          "query": "what is the user's job title?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_title_old"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_title_old",
+            "mem_t_drink_old",
+            "mem_t_city_old",
+            "mem_t_lead_old"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 15.704924999226932
+        },
+        {
+          "query": "which city does the user live in?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_city_new"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_city_new",
+            "mem_sh_marathon",
+            "mem_dist_35",
+            "mem_t_drink_new",
+            "mem_pref_meeting",
+            "mem_sh_passport",
+            "mem_sh_dentist",
+            "mem_sh_mortgage",
+            "mem_mh_rivendell_join",
+            "mem_sh_allergy"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 20.713473999421694
+        },
+        {
+          "query": "who is the current project lead for the cobalt initiative?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_lead_new"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_lead_new",
+            "mem_mh_alice_lead",
+            "mem_mh_apollo_owner",
+            "mem_sh_marathon",
+            "mem_mh_rivendell_join",
+            "mem_t_title_new",
+            "mem_mh_rivendell_stack",
+            "mem_dist_27",
+            "mem_sh_canary",
+            "mem_sh_lasagna"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 20.79111099919828
+        },
+        {
+          "query": "what kind of keyboards does the user like?",
+          "category": "preference",
+          "gold_memory_ids": [
+            "mem_pref_keyboard"
+          ],
+          "retrieved_memory_ids": [
+            "mem_pref_keyboard",
+            "mem_t_drink_new",
+            "mem_t_city_new",
+            "mem_dist_20",
+            "mem_sh_lasagna",
+            "mem_t_title_new",
+            "mem_sh_allergy",
+            "mem_mh_alice_lead",
+            "mem_sh_dentist",
+            "mem_sh_passport"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 32.98344600079872
+        },
+        {
+          "query": "when does the user not want to be scheduled for meetings?",
+          "category": "preference",
+          "gold_memory_ids": [
+            "mem_pref_meeting"
+          ],
+          "retrieved_memory_ids": [
+            "mem_pref_meeting",
+            "mem_dist_26",
+            "mem_sh_dentist",
+            "mem_t_drink_new",
+            "mem_dist_31",
+            "mem_sh_marathon",
+            "mem_dist_38",
+            "mem_dist_49",
+            "mem_dist_41",
+            "mem_dist_28"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 38.42205399996601
+        }
+      ],
+      "precision_at_k": 0.13,
+      "recall_at_k": 1.0,
+      "mrr": 1.0,
+      "hit_at_1": 1.0,
+      "hit_at_5": 1.0,
+      "latency_p50_ms": 20.881420499790693,
+      "latency_p95_ms": 33.255376400757086,
+      "latency_mean_ms": 22.2004207498685,
+      "ram_peak_mb": 230.87109375,
+      "ingest_seconds": 1.5843065879998903,
+      "by_category": {
+        "single-hop": {
+          "n": 8.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "multi-hop": {
+          "n": 6.0,
+          "precision_at_k": 0.20000000000000004,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "temporal": {
+          "n": 4.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "preference": {
+          "n": 2.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        }
+      },
+      "mode": "retrieval-only",
+      "tokens_used": 0,
+      "ingest_p50_ms": 0.0
+    },
+    {
+      "engine": "mem0",
+      "status": "OK",
+      "n_cases": 20,
+      "queries": [
+        {
+          "query": "what is my favorite dinner recipe?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_lasagna"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_lasagna",
+            "mem_sh_allergy",
+            "mem_dist_33",
+            "mem_dist_23",
+            "mem_t_drink_old",
+            "mem_dist_39",
+            "mem_dist_45",
+            "mem_t_drink_new",
+            "mem_mh_rivendell_stack"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1016.1377349995746
+        },
+        {
+          "query": "when is my dentist appointment at SmileBright?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_dentist"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_dentist",
+            "mem_pref_meeting",
+            "mem_dist_37",
+            "mem_dist_37",
+            "mem_dist_39",
+            "mem_dist_33",
+            "mem_dist_22",
+            "mem_sh_mortgage",
+            "mem_dist_35",
+            "mem_dist_23"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1460.7642980008677
+        },
+        {
+          "query": "which marathon did I sign up for?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_marathon"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_marathon",
+            "mem_dist_17",
+            "mem_dist_17",
+            "mem_dist_37",
+            "mem_dist_37",
+            "mem_dist_42",
+            "mem_mh_study_phase",
+            "mem_mh_study_phase",
+            "mem_dist_48",
+            "mem_sh_dentist"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 330.56027199927485
+        },
+        {
+          "query": "what does the canary-bench project measure?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_canary"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_canary",
+            "mem_sh_canary",
+            "mem_dist_42",
+            "mem_t_lead_old",
+            "mem_t_lead_old",
+            "mem_mh_apollo_owner",
+            "mem_t_lead_new",
+            "mem_t_lead_new",
+            "mem_mh_rivendell_stack",
+            "mem_mh_rivendell_join"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 2.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 501.58029299927875
+        },
+        {
+          "query": "what is my passport number?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_passport"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_passport",
+            "mem_dist_25",
+            "mem_dist_30",
+            "mem_dist_30",
+            "mem_dist_35",
+            "mem_dist_35",
+            "mem_dist_28",
+            "mem_sh_marathon",
+            "mem_dist_29",
+            "mem_sh_dentist"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 892.8124909998587
+        },
+        {
+          "query": "when is my mother's birthday?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_birthday"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_birthday",
+            "mem_sh_dentist",
+            "mem_sh_passport",
+            "mem_t_city_new",
+            "mem_dist_07",
+            "mem_mh_storage_deadline",
+            "mem_sh_marathon",
+            "mem_mh_storage_deadline",
+            "mem_dist_41",
+            "mem_dist_48"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 348.8873059995967
+        },
+        {
+          "query": "how much is my monthly mortgage payment?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_mortgage"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_mortgage",
+            "mem_sh_canary",
+            "mem_sh_canary",
+            "mem_dist_40",
+            "mem_dist_29",
+            "mem_dist_49",
+            "mem_sh_dentist",
+            "mem_dist_25",
+            "mem_dist_41",
+            "mem_dist_35"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 985.7223519993568
+        },
+        {
+          "query": "what foods am I allergic to?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_allergy"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_allergy",
+            "mem_sh_lasagna",
+            "mem_dist_23",
+            "mem_dist_33",
+            "mem_mh_rivendell_stack",
+            "mem_mh_study_drug",
+            "mem_dist_43",
+            "mem_t_drink_new",
+            "mem_dist_06",
+            "mem_mh_study_drug"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 509.98844200148596
+        },
+        {
+          "query": "when is alice's team's bigtable migration due?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_alice_lead",
+            "mem_mh_storage_deadline"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_storage_deadline",
+            "mem_mh_storage_deadline",
+            "mem_mh_alice_lead",
+            "mem_mh_alice_lead",
+            "mem_mh_design_figma",
+            "mem_mh_bob_growth",
+            "mem_mh_bob_growth",
+            "mem_mh_carla_design",
+            "mem_mh_growth_tokyo",
+            "mem_mh_carla_design"
+          ],
+          "metrics": {
+            "precision_at_k": 0.4,
+            "recall_at_k": 2.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 528.5250010001619
+        },
+        {
+          "query": "what is the stack of the project I joined as principal engineer?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_rivendell_join",
+            "mem_mh_rivendell_stack"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_rivendell_join",
+            "mem_mh_rivendell_stack",
+            "mem_t_title_old",
+            "mem_t_title_new",
+            "mem_t_lead_new",
+            "mem_t_title_new",
+            "mem_t_lead_new",
+            "mem_t_lead_old",
+            "mem_t_lead_old",
+            "mem_dist_31"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1439.8469739990105
+        },
+        {
+          "query": "where is the team bob runs based?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_bob_growth",
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo",
+            "mem_dist_42",
+            "mem_dist_16",
+            "mem_mh_apollo_oncall",
+            "mem_dist_36",
+            "mem_mh_carla_design",
+            "mem_mh_storage_deadline",
+            "mem_mh_carla_design"
+          ],
+          "metrics": {
+            "precision_at_k": 0.3,
+            "recall_at_k": 1.5,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 385.09994900050515
+        },
+        {
+          "query": "what trial phase is dr. mendes' molecule in?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_study_drug",
+            "mem_mh_study_phase"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_study_drug",
+            "mem_mh_study_drug",
+            "mem_mh_study_phase",
+            "mem_mh_study_phase",
+            "mem_t_lead_old",
+            "mem_t_lead_old",
+            "mem_sh_dentist",
+            "mem_mh_rivendell_join",
+            "mem_t_lead_new",
+            "mem_sh_canary"
+          ],
+          "metrics": {
+            "precision_at_k": 0.4,
+            "recall_at_k": 2.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1561.3895540009253
+        },
+        {
+          "query": "which design tool did carla's team migrate to?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_carla_design",
+            "mem_mh_design_figma"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_carla_design",
+            "mem_mh_carla_design",
+            "mem_mh_design_figma",
+            "mem_mh_storage_deadline",
+            "mem_mh_storage_deadline",
+            "mem_mh_alice_lead",
+            "mem_mh_alice_lead",
+            "mem_mh_bob_growth",
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo"
+          ],
+          "metrics": {
+            "precision_at_k": 0.3,
+            "recall_at_k": 1.5,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 948.6711800000194
+        },
+        {
+          "query": "how does the team that owns project apollo handle on-call?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_apollo_owner",
+            "mem_mh_apollo_oncall"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_apollo_owner",
+            "mem_t_lead_new",
+            "mem_t_lead_new",
+            "mem_t_lead_old",
+            "mem_sh_canary",
+            "mem_t_lead_old",
+            "mem_sh_canary",
+            "mem_mh_bob_growth",
+            "mem_mh_rivendell_join",
+            "mem_mh_bob_growth"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 0.5,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 509.10341100097867
+        },
+        {
+          "query": "what does the user prefer to drink in the afternoon?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_drink_old"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_drink_old",
+            "mem_t_drink_new",
+            "mem_pref_keyboard",
+            "b1",
+            "mem_dist_33",
+            "mem_dist_23",
+            "mem_pref_meeting",
+            "mem_sh_lasagna",
+            "mem_dist_20",
+            "mem_dist_24"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 587.089320000814
+        },
+        {
+          "query": "what is the user's job title?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_title_old"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_title_old",
+            "mem_t_title_new",
+            "mem_t_title_new",
+            "mem_mh_apollo_oncall",
+            "mem_mh_apollo_owner",
+            "mem_mh_growth_tokyo",
+            "mem_dist_35",
+            "mem_dist_26",
+            "b2",
+            "mem_mh_alice_lead"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 538.0510920003871
+        },
+        {
+          "query": "which city does the user live in?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_city_new"
+          ],
+          "retrieved_memory_ids": [
+            "b2",
+            "mem_t_city_old",
+            "mem_t_city_new",
+            "mem_dist_35",
+            "mem_mh_growth_tokyo",
+            "mem_t_title_old",
+            "mem_sh_passport",
+            "mem_mh_rivendell_stack",
+            "mem_sh_mortgage",
+            "mem_sh_marathon"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.3333333333333333,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 471.36824100016383
+        },
+        {
+          "query": "who is the current project lead for the cobalt initiative?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_lead_new"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_lead_old",
+            "mem_t_lead_old",
+            "mem_t_lead_new",
+            "mem_t_lead_new",
+            "mem_mh_alice_lead",
+            "mem_mh_alice_lead",
+            "mem_mh_storage_deadline",
+            "mem_mh_rivendell_join",
+            "mem_mh_apollo_owner",
+            "mem_mh_study_drug"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 2.0,
+            "mrr": 0.3333333333333333,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1422.5345830000151
+        },
+        {
+          "query": "what kind of keyboards does the user like?",
+          "category": "preference",
+          "gold_memory_ids": [
+            "mem_pref_keyboard"
+          ],
+          "retrieved_memory_ids": [
+            "mem_pref_keyboard",
+            "mem_dist_15",
+            "mem_sh_lasagna",
+            "mem_t_drink_old",
+            "mem_dist_29",
+            "b2",
+            "mem_t_drink_new",
+            "mem_dist_25",
+            "b1",
+            "mem_dist_20"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 368.8379760005773
+        },
+        {
+          "query": "when does the user not want to be scheduled for meetings?",
+          "category": "preference",
+          "gold_memory_ids": [
+            "mem_pref_meeting"
+          ],
+          "retrieved_memory_ids": [
+            "mem_pref_meeting",
+            "mem_sh_dentist",
+            "mem_dist_35",
+            "mem_dist_26",
+            "mem_dist_00",
+            "mem_dist_35",
+            "mem_dist_32",
+            "mem_dist_35",
+            "mem_dist_31",
+            "mem_dist_22"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 372.48927600012394
+        }
+      ],
+      "precision_at_k": 0.165,
+      "recall_at_k": 1.225,
+      "mrr": 0.9333333333333333,
+      "hit_at_1": 0.9,
+      "hit_at_5": 1.0,
+      "latency_p50_ms": 533.2880465002745,
+      "latency_p95_ms": 1465.7955608008706,
+      "latency_mean_ms": 758.9729873001488,
+      "ram_peak_mb": 865.22265625,
+      "ingest_seconds": 162.66506756200033,
+      "by_category": {
+        "single-hop": {
+          "n": 8.0,
+          "precision_at_k": 0.1125,
+          "recall_at_k": 1.125,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "multi-hop": {
+          "n": 6.0,
+          "precision_at_k": 0.2833333333333333,
+          "recall_at_k": 1.4166666666666667,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "temporal": {
+          "n": 4.0,
+          "precision_at_k": 0.125,
+          "recall_at_k": 1.25,
+          "mrr": 0.6666666666666666,
+          "hit_at_1": 0.5
+        },
+        "preference": {
+          "n": 2.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        }
+      },
+      "mode": "retrieval-only",
+      "tokens_used": 0,
+      "ingest_p50_ms": 0.0
+    },
+    {
+      "engine": "cognee",
+      "status": "OK",
+      "n_cases": 20,
+      "queries": [
+        {
+          "query": "what is my favorite dinner recipe?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_lasagna"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_lasagna",
+            "mem_dist_33",
+            "mem_sh_allergy",
+            "mem_dist_23",
+            "mem_dist_39",
+            "mem_t_drink_new",
+            "mem_t_drink_old",
+            "mem_sh_birthday",
+            "mem_dist_45",
+            "mem_mh_rivendell_stack"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 934.4712780002737
+        },
+        {
+          "query": "when is my dentist appointment at SmileBright?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_dentist"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_dentist",
+            "mem_pref_meeting",
+            "mem_dist_24",
+            "mem_dist_22",
+            "mem_dist_26",
+            "mem_dist_39",
+            "mem_sh_birthday",
+            "mem_sh_mortgage",
+            "mem_dist_44",
+            "mem_sh_marathon"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1305.3913399999146
+        },
+        {
+          "query": "which marathon did I sign up for?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_marathon"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_marathon",
+            "mem_dist_42",
+            "mem_dist_35",
+            "mem_dist_37",
+            "mem_dist_44",
+            "mem_sh_passport",
+            "mem_dist_48",
+            "mem_dist_39",
+            "mem_sh_dentist",
+            "mem_mh_study_phase"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 988.2123919996957
+        },
+        {
+          "query": "what does the canary-bench project measure?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_canary"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_canary",
+            "mem_t_lead_new",
+            "mem_t_lead_old",
+            "mem_mh_rivendell_stack",
+            "mem_mh_apollo_owner",
+            "mem_dist_18",
+            "mem_dist_01",
+            "mem_dist_20",
+            "mem_dist_42",
+            "mem_mh_apollo_oncall"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1165.7306909983163
+        },
+        {
+          "query": "what is my passport number?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_passport"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_passport",
+            "mem_dist_30",
+            "mem_dist_28",
+            "mem_sh_marathon",
+            "mem_sh_birthday",
+            "mem_dist_08",
+            "mem_dist_25",
+            "mem_dist_11",
+            "mem_dist_21",
+            "mem_dist_29"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 813.8521689998015
+        },
+        {
+          "query": "when is my mother's birthday?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_birthday"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_birthday",
+            "mem_sh_passport",
+            "mem_sh_marathon",
+            "mem_mh_storage_deadline",
+            "mem_sh_dentist",
+            "mem_dist_40",
+            "mem_dist_41",
+            "mem_dist_33",
+            "mem_mh_alice_lead",
+            "mem_dist_32"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 896.7549400003918
+        },
+        {
+          "query": "how much is my monthly mortgage payment?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_mortgage"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_mortgage",
+            "mem_dist_30",
+            "mem_sh_birthday",
+            "mem_dist_29",
+            "mem_sh_dentist",
+            "mem_dist_35",
+            "mem_dist_27",
+            "mem_dist_22",
+            "mem_dist_28",
+            "mem_mh_apollo_oncall"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 960.122300999501
+        },
+        {
+          "query": "what foods am I allergic to?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_allergy"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_allergy",
+            "mem_sh_lasagna",
+            "mem_dist_23",
+            "mem_dist_33",
+            "mem_dist_43",
+            "mem_dist_39",
+            "mem_dist_38",
+            "mem_pref_meeting",
+            "mem_t_drink_new",
+            "mem_t_drink_old"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1255.0297819998377
+        },
+        {
+          "query": "when is alice's team's bigtable migration due?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_alice_lead",
+            "mem_mh_storage_deadline"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_storage_deadline",
+            "mem_mh_alice_lead",
+            "mem_sh_canary",
+            "mem_mh_design_figma",
+            "mem_mh_bob_growth",
+            "mem_mh_apollo_owner",
+            "mem_mh_apollo_oncall",
+            "mem_dist_26",
+            "mem_t_lead_new",
+            "mem_t_lead_old"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 772.9985050009418
+        },
+        {
+          "query": "what is the stack of the project I joined as principal engineer?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_rivendell_join",
+            "mem_mh_rivendell_stack"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_rivendell_join",
+            "mem_t_title_new",
+            "mem_t_title_old",
+            "mem_mh_rivendell_stack",
+            "mem_mh_apollo_owner",
+            "mem_mh_alice_lead",
+            "mem_t_lead_old",
+            "mem_t_lead_new",
+            "mem_mh_apollo_oncall",
+            "mem_mh_bob_growth"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1201.884901000085
+        },
+        {
+          "query": "where is the team bob runs based?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo",
+            "mem_sh_marathon",
+            "mem_mh_carla_design",
+            "mem_mh_alice_lead",
+            "mem_t_lead_old",
+            "mem_dist_44",
+            "mem_t_city_old",
+            "mem_mh_apollo_owner",
+            "mem_t_title_old"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 960.8187529993302
+        },
+        {
+          "query": "what trial phase is dr. mendes' molecule in?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_study_drug",
+            "mem_mh_study_phase"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_study_phase",
+            "mem_mh_study_drug",
+            "mem_mh_carla_design",
+            "mem_mh_design_figma",
+            "mem_t_lead_new",
+            "mem_t_lead_old",
+            "mem_mh_bob_growth",
+            "mem_sh_dentist",
+            "mem_mh_rivendell_join",
+            "mem_sh_marathon"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1528.190402999826
+        },
+        {
+          "query": "which design tool did carla's team migrate to?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_carla_design",
+            "mem_mh_design_figma"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_carla_design",
+            "mem_mh_design_figma",
+            "mem_mh_alice_lead",
+            "mem_t_lead_old",
+            "mem_t_lead_new",
+            "mem_mh_rivendell_join",
+            "mem_mh_bob_growth",
+            "mem_mh_storage_deadline",
+            "mem_mh_growth_tokyo",
+            "mem_dist_26"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1020.8021170001302
+        },
+        {
+          "query": "how does the team that owns project apollo handle on-call?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_apollo_owner",
+            "mem_mh_apollo_oncall"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_apollo_oncall",
+            "mem_mh_apollo_owner",
+            "mem_dist_26",
+            "mem_mh_alice_lead",
+            "mem_mh_rivendell_join",
+            "mem_mh_storage_deadline",
+            "mem_mh_bob_growth",
+            "mem_t_lead_old",
+            "mem_mh_growth_tokyo",
+            "mem_sh_canary"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 944.5799109998916
+        },
+        {
+          "query": "what does the user prefer to drink in the afternoon?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_drink_old"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_drink_old",
+            "mem_t_drink_new",
+            "mem_pref_meeting",
+            "mem_dist_20",
+            "mem_dist_43",
+            "mem_sh_lasagna",
+            "mem_pref_keyboard",
+            "mem_dist_33",
+            "mem_dist_23",
+            "mem_sh_birthday"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1110.475540999687
+        },
+        {
+          "query": "what is the user's job title?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_title_old"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_title_old",
+            "mem_t_title_new",
+            "mem_mh_rivendell_join",
+            "mem_mh_bob_growth",
+            "mem_sh_passport",
+            "mem_pref_meeting",
+            "mem_sh_dentist",
+            "mem_sh_birthday",
+            "mem_mh_alice_lead",
+            "mem_sh_marathon"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1266.0267230003228
+        },
+        {
+          "query": "which city does the user live in?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_city_new"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_city_old",
+            "mem_t_city_new",
+            "mem_dist_35",
+            "mem_sh_marathon",
+            "mem_t_title_old",
+            "mem_t_title_new",
+            "mem_pref_meeting",
+            "mem_mh_growth_tokyo",
+            "mem_sh_dentist",
+            "mem_sh_birthday"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.5,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 1092.9157259997737
+        },
+        {
+          "query": "who is the current project lead for the cobalt initiative?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_lead_new"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_lead_new",
+            "mem_t_lead_old",
+            "mem_mh_alice_lead",
+            "mem_mh_rivendell_join",
+            "mem_mh_bob_growth",
+            "mem_mh_carla_design",
+            "mem_mh_apollo_owner",
+            "mem_mh_study_drug",
+            "mem_t_title_old",
+            "mem_mh_storage_deadline"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 837.3844350007857
+        },
+        {
+          "query": "what kind of keyboards does the user like?",
+          "category": "preference",
+          "gold_memory_ids": [
+            "mem_pref_keyboard"
+          ],
+          "retrieved_memory_ids": [
+            "mem_pref_keyboard",
+            "mem_t_drink_new",
+            "mem_t_drink_old",
+            "mem_pref_meeting",
+            "mem_dist_15",
+            "mem_dist_29",
+            "mem_sh_lasagna",
+            "mem_sh_allergy",
+            "mem_t_city_old",
+            "mem_t_city_new"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 927.5735779992829
+        },
+        {
+          "query": "when does the user not want to be scheduled for meetings?",
+          "category": "preference",
+          "gold_memory_ids": [
+            "mem_pref_meeting"
+          ],
+          "retrieved_memory_ids": [
+            "mem_pref_meeting",
+            "mem_dist_32",
+            "mem_sh_dentist",
+            "mem_dist_26",
+            "mem_sh_birthday",
+            "mem_t_drink_old",
+            "mem_dist_31",
+            "mem_mh_apollo_oncall",
+            "mem_t_drink_new",
+            "mem_dist_22"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 849.9198710014753
+        }
+      ],
+      "precision_at_k": 0.13,
+      "recall_at_k": 1.0,
+      "mrr": 0.975,
+      "hit_at_1": 0.95,
+      "hit_at_5": 1.0,
+      "latency_p50_ms": 974.5155724995129,
+      "latency_p95_ms": 1316.5312931499104,
+      "latency_mean_ms": 1041.6567678499632,
+      "ram_peak_mb": 1642.98046875,
+      "ingest_seconds": 181.35089412999878,
+      "by_category": {
+        "single-hop": {
+          "n": 8.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "multi-hop": {
+          "n": 6.0,
+          "precision_at_k": 0.20000000000000004,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "temporal": {
+          "n": 4.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 0.875,
+          "hit_at_1": 0.75
+        },
+        "preference": {
+          "n": 2.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        }
+      },
+      "mode": "retrieval-only",
+      "tokens_used": 0,
+      "ingest_p50_ms": 0.0
+    },
+    {
+      "engine": "memori",
+      "status": "OK",
+      "n_cases": 20,
+      "queries": [
+        {
+          "query": "what is my favorite dinner recipe?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_lasagna"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_lasagna",
+            "mem_dist_33",
+            "mem_dist_43",
+            "mem_t_drink_old",
+            "mem_dist_23",
+            "mem_t_drink_new",
+            "mem_dist_39",
+            "mem_dist_38",
+            "mem_dist_08",
+            "mem_sh_allergy"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 277.99990399944363
+        },
+        {
+          "query": "when is my dentist appointment at SmileBright?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_dentist"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_dentist",
+            "mem_dist_24",
+            "mem_dist_26",
+            "mem_sh_marathon",
+            "mem_pref_meeting",
+            "mem_dist_49",
+            "mem_sh_birthday",
+            "mem_dist_32",
+            "mem_dist_38",
+            "mem_dist_23"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 314.60059999881196
+        },
+        {
+          "query": "which marathon did I sign up for?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_marathon"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_marathon",
+            "mem_dist_42",
+            "mem_sh_dentist",
+            "mem_dist_40",
+            "mem_t_lead_new",
+            "mem_dist_36",
+            "mem_t_lead_old",
+            "mem_dist_24",
+            "mem_mh_rivendell_join",
+            "mem_dist_32"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 338.5080040006869
+        },
+        {
+          "query": "what does the canary-bench project measure?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_canary"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_canary",
+            "mem_t_lead_old",
+            "mem_t_lead_new",
+            "mem_mh_apollo_owner",
+            "mem_dist_20",
+            "mem_mh_rivendell_join",
+            "mem_dist_00",
+            "mem_mh_rivendell_stack",
+            "mem_dist_27",
+            "mem_mh_apollo_oncall"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 341.1794940002437
+        },
+        {
+          "query": "what is my passport number?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_passport"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_passport",
+            "mem_t_city_new",
+            "mem_sh_mortgage",
+            "mem_t_city_old",
+            "mem_sh_marathon",
+            "mem_mh_study_drug",
+            "mem_sh_dentist",
+            "mem_sh_birthday",
+            "mem_dist_21",
+            "mem_t_title_old"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 428.2025270003942
+        },
+        {
+          "query": "when is my mother's birthday?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_birthday"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_birthday",
+            "mem_dist_40",
+            "mem_dist_48",
+            "mem_sh_lasagna",
+            "mem_dist_49",
+            "mem_sh_marathon",
+            "mem_mh_alice_lead",
+            "mem_dist_43",
+            "mem_dist_23",
+            "mem_mh_carla_design"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 427.87199600024906
+        },
+        {
+          "query": "how much is my monthly mortgage payment?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_mortgage"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_mortgage",
+            "mem_sh_canary",
+            "mem_dist_35",
+            "mem_dist_27",
+            "mem_dist_29",
+            "mem_dist_09",
+            "mem_dist_44",
+            "mem_sh_birthday",
+            "mem_dist_22",
+            "mem_mh_apollo_oncall"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 384.215932999723
+        },
+        {
+          "query": "what foods am I allergic to?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_allergy"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_allergy",
+            "mem_sh_lasagna",
+            "mem_dist_33",
+            "mem_dist_38",
+            "mem_dist_05",
+            "mem_dist_11",
+            "mem_dist_43",
+            "mem_dist_48",
+            "mem_dist_23",
+            "mem_dist_22"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 285.4552139997395
+        },
+        {
+          "query": "when is alice's team's bigtable migration due?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_alice_lead",
+            "mem_mh_storage_deadline"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_storage_deadline",
+            "mem_mh_alice_lead",
+            "mem_mh_bob_growth",
+            "mem_mh_design_figma",
+            "mem_mh_carla_design",
+            "mem_mh_growth_tokyo",
+            "mem_mh_rivendell_stack",
+            "mem_t_lead_new",
+            "mem_sh_canary",
+            "mem_dist_21"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 103.43564499999047
+        },
+        {
+          "query": "what is the stack of the project I joined as principal engineer?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_rivendell_join",
+            "mem_mh_rivendell_stack"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_rivendell_join",
+            "mem_t_title_old",
+            "mem_t_title_new",
+            "mem_mh_apollo_owner",
+            "mem_mh_growth_tokyo",
+            "mem_mh_rivendell_stack",
+            "mem_mh_carla_design",
+            "mem_t_lead_old",
+            "mem_t_lead_new",
+            "mem_mh_design_figma"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 293.162857000425
+        },
+        {
+          "query": "where is the team bob runs based?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo",
+            "mem_mh_apollo_oncall",
+            "mem_mh_alice_lead",
+            "mem_dist_36",
+            "mem_sh_marathon",
+            "mem_dist_42",
+            "mem_mh_carla_design",
+            "mem_dist_44",
+            "mem_mh_apollo_owner"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 434.825282998645
+        },
+        {
+          "query": "what trial phase is dr. mendes' molecule in?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_study_drug",
+            "mem_mh_study_phase"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_study_drug",
+            "mem_mh_study_phase",
+            "mem_t_lead_old",
+            "mem_sh_dentist",
+            "mem_t_lead_new",
+            "mem_mh_apollo_owner",
+            "mem_mh_rivendell_join",
+            "mem_mh_apollo_oncall",
+            "mem_mh_carla_design",
+            "mem_dist_43"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 461.65548900171416
+        },
+        {
+          "query": "which design tool did carla's team migrate to?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_carla_design",
+            "mem_mh_design_figma"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_carla_design",
+            "mem_mh_design_figma",
+            "mem_t_lead_new",
+            "mem_mh_alice_lead",
+            "mem_mh_growth_tokyo",
+            "mem_t_lead_old",
+            "mem_mh_bob_growth",
+            "mem_mh_rivendell_join",
+            "mem_mh_apollo_owner",
+            "mem_mh_apollo_oncall"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 470.2270550005778
+        },
+        {
+          "query": "how does the team that owns project apollo handle on-call?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_apollo_owner",
+            "mem_mh_apollo_oncall"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_apollo_owner",
+            "mem_mh_apollo_oncall",
+            "mem_mh_carla_design",
+            "mem_dist_26",
+            "mem_t_lead_new",
+            "mem_mh_rivendell_join",
+            "mem_mh_storage_deadline",
+            "mem_mh_alice_lead",
+            "mem_sh_canary",
+            "mem_mh_bob_growth"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 448.05165599973407
+        },
+        {
+          "query": "what does the user prefer to drink in the afternoon?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_drink_old"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_drink_old",
+            "mem_t_drink_new",
+            "mem_sh_lasagna",
+            "mem_pref_meeting",
+            "mem_dist_33",
+            "mem_dist_23",
+            "mem_dist_39",
+            "mem_dist_24",
+            "mem_sh_dentist",
+            "mem_pref_keyboard"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 284.89971999988484
+        },
+        {
+          "query": "what is the user's job title?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_title_old"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_title_new",
+            "mem_t_title_old",
+            "mem_mh_rivendell_join",
+            "mem_sh_marathon",
+            "mem_t_drink_old",
+            "mem_mh_apollo_oncall",
+            "mem_sh_lasagna",
+            "mem_t_city_old",
+            "mem_sh_dentist",
+            "mem_t_city_new"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.5,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 377.9135410004528
+        },
+        {
+          "query": "which city does the user live in?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_city_new"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_city_old",
+            "mem_t_city_new",
+            "mem_dist_35",
+            "mem_sh_marathon",
+            "mem_t_drink_new",
+            "mem_pref_meeting",
+            "mem_sh_passport",
+            "mem_dist_45",
+            "mem_sh_dentist",
+            "mem_sh_mortgage"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.5,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 234.4861290002882
+        },
+        {
+          "query": "who is the current project lead for the cobalt initiative?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_lead_new"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_lead_old",
+            "mem_t_lead_new",
+            "mem_mh_alice_lead",
+            "mem_mh_apollo_owner",
+            "mem_mh_rivendell_join",
+            "mem_sh_marathon",
+            "mem_t_title_old",
+            "mem_mh_design_figma",
+            "mem_t_title_new",
+            "mem_mh_carla_design"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.5,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 37.44100500080094
+        },
+        {
+          "query": "what kind of keyboards does the user like?",
+          "category": "preference",
+          "gold_memory_ids": [
+            "mem_pref_keyboard"
+          ],
+          "retrieved_memory_ids": [
+            "mem_pref_keyboard",
+            "mem_t_drink_new",
+            "mem_t_city_new",
+            "mem_t_city_old",
+            "mem_t_drink_old",
+            "mem_sh_lasagna",
+            "mem_t_title_new",
+            "mem_mh_apollo_oncall",
+            "mem_sh_allergy",
+            "mem_t_title_old"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 340.5564240001695
+        },
+        {
+          "query": "when does the user not want to be scheduled for meetings?",
+          "category": "preference",
+          "gold_memory_ids": [
+            "mem_pref_meeting"
+          ],
+          "retrieved_memory_ids": [
+            "mem_pref_meeting",
+            "mem_sh_dentist",
+            "mem_dist_26",
+            "mem_dist_32",
+            "mem_t_drink_new",
+            "mem_t_drink_old",
+            "mem_sh_marathon",
+            "mem_dist_31",
+            "mem_dist_23",
+            "mem_dist_22"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 284.44677900006354
+        }
+      ],
+      "precision_at_k": 0.13,
+      "recall_at_k": 1.0,
+      "mrr": 0.925,
+      "hit_at_1": 0.85,
+      "hit_at_5": 1.0,
+      "latency_p50_ms": 339.5322140004282,
+      "latency_p95_ms": 462.08406730165734,
+      "latency_mean_ms": 328.4567627501019,
+      "ram_peak_mb": 1841.2109375,
+      "ingest_seconds": 9.46893455099962,
+      "by_category": {
+        "single-hop": {
+          "n": 8.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "multi-hop": {
+          "n": 6.0,
+          "precision_at_k": 0.20000000000000004,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "temporal": {
+          "n": 4.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 0.625,
+          "hit_at_1": 0.25
+        },
+        "preference": {
+          "n": 2.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        }
+      },
+      "mode": "retrieval-only",
+      "tokens_used": 0,
+      "ingest_p50_ms": 0.0
+    },
+    {
+      "engine": "langmem",
+      "status": "OK",
+      "n_cases": 20,
+      "queries": [
+        {
+          "query": "what is my favorite dinner recipe?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_lasagna"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_lasagna",
+            "mem_sh_allergy",
+            "mem_dist_33",
+            "mem_dist_23",
+            "mem_dist_39",
+            "mem_t_drink_new",
+            "mem_mh_rivendell_stack",
+            "mem_t_drink_old",
+            "mem_dist_45",
+            "mem_sh_birthday"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 326.4033460000064
+        },
+        {
+          "query": "when is my dentist appointment at SmileBright?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_dentist"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_dentist",
+            "mem_pref_meeting",
+            "mem_dist_37",
+            "mem_dist_39",
+            "mem_dist_33",
+            "mem_dist_22",
+            "mem_dist_32",
+            "mem_dist_26",
+            "mem_dist_23",
+            "mem_dist_44"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 671.4333440013434
+        },
+        {
+          "query": "which marathon did I sign up for?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_marathon"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_marathon",
+            "mem_dist_42",
+            "mem_mh_study_phase",
+            "mem_dist_37",
+            "mem_dist_25",
+            "mem_dist_17",
+            "mem_mh_bob_growth",
+            "mem_mh_storage_deadline",
+            "mem_dist_48",
+            "mem_sh_dentist"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 345.0295370003005
+        },
+        {
+          "query": "what does the canary-bench project measure?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_canary"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_canary",
+            "mem_t_lead_old",
+            "mem_mh_study_drug",
+            "mem_t_lead_new",
+            "mem_mh_study_phase",
+            "mem_dist_01",
+            "mem_mh_rivendell_stack",
+            "mem_dist_42",
+            "mem_dist_10",
+            "mem_mh_apollo_owner"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 342.002377999961
+        },
+        {
+          "query": "what is my passport number?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_passport"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_passport",
+            "mem_dist_30",
+            "mem_dist_25",
+            "mem_dist_28",
+            "mem_dist_29",
+            "mem_sh_marathon",
+            "mem_dist_14",
+            "mem_dist_21",
+            "mem_dist_12",
+            "mem_dist_11"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 374.9023720010882
+        },
+        {
+          "query": "when is my mother's birthday?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_birthday"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_birthday",
+            "mem_mh_storage_deadline",
+            "mem_sh_passport",
+            "mem_dist_41",
+            "mem_dist_48",
+            "mem_dist_38",
+            "mem_dist_33",
+            "mem_dist_32",
+            "mem_dist_37",
+            "mem_sh_dentist"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 614.0100800002983
+        },
+        {
+          "query": "how much is my monthly mortgage payment?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_mortgage"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_mortgage",
+            "mem_dist_25",
+            "mem_dist_29",
+            "mem_sh_canary",
+            "mem_sh_dentist",
+            "mem_dist_46",
+            "mem_dist_40",
+            "mem_dist_23",
+            "mem_dist_44",
+            "mem_dist_22"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 478.3554899986484
+        },
+        {
+          "query": "what foods am I allergic to?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_allergy"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_allergy",
+            "mem_sh_lasagna",
+            "mem_dist_23",
+            "mem_dist_33",
+            "mem_mh_study_drug",
+            "mem_dist_38",
+            "mem_dist_39",
+            "mem_dist_32",
+            "mem_dist_18",
+            "mem_mh_study_phase"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 324.65392899939616
+        },
+        {
+          "query": "when is alice's team's bigtable migration due?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_alice_lead",
+            "mem_mh_storage_deadline"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_storage_deadline",
+            "mem_mh_alice_lead",
+            "mem_sh_canary",
+            "mem_mh_design_figma",
+            "mem_dist_13",
+            "mem_mh_bob_growth",
+            "mem_dist_07",
+            "mem_mh_growth_tokyo",
+            "mem_dist_01",
+            "mem_mh_rivendell_stack"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 313.8254320001579
+        },
+        {
+          "query": "what is the stack of the project I joined as principal engineer?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_rivendell_join",
+            "mem_mh_rivendell_stack"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_rivendell_join",
+            "mem_t_title_old",
+            "mem_t_title_new",
+            "mem_mh_rivendell_stack",
+            "mem_mh_apollo_owner",
+            "mem_mh_alice_lead",
+            "mem_t_lead_new",
+            "mem_t_lead_old",
+            "mem_mh_carla_design",
+            "mem_mh_bob_growth"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 449.52482499866164
+        },
+        {
+          "query": "where is the team bob runs based?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo",
+            "mem_sh_marathon",
+            "mem_dist_42",
+            "mem_mh_apollo_owner",
+            "mem_mh_carla_design",
+            "mem_dist_44",
+            "mem_mh_storage_deadline",
+            "mem_t_lead_old",
+            "mem_mh_rivendell_join"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 410.19678300108353
+        },
+        {
+          "query": "what trial phase is dr. mendes' molecule in?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_study_drug",
+            "mem_mh_study_phase"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_study_drug",
+            "mem_mh_study_phase",
+            "mem_t_lead_old",
+            "mem_mh_rivendell_join",
+            "mem_sh_dentist",
+            "mem_mh_apollo_owner",
+            "mem_sh_canary",
+            "mem_t_lead_new",
+            "mem_dist_00",
+            "mem_mh_bob_growth"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 312.7877709994209
+        },
+        {
+          "query": "which design tool did carla's team migrate to?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_carla_design",
+            "mem_mh_design_figma"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_carla_design",
+            "mem_mh_design_figma",
+            "mem_mh_rivendell_join",
+            "mem_mh_storage_deadline",
+            "mem_mh_alice_lead",
+            "mem_t_lead_old",
+            "mem_t_lead_new",
+            "mem_mh_bob_growth",
+            "mem_t_title_new",
+            "mem_mh_apollo_owner"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 313.2774519999657
+        },
+        {
+          "query": "how does the team that owns project apollo handle on-call?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_apollo_owner",
+            "mem_mh_apollo_oncall"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_apollo_owner",
+            "mem_mh_apollo_oncall",
+            "mem_dist_26",
+            "mem_t_title_new",
+            "mem_t_title_old",
+            "mem_mh_storage_deadline",
+            "mem_dist_32",
+            "mem_t_lead_new",
+            "mem_mh_growth_tokyo",
+            "mem_mh_bob_growth"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 494.98960799974157
+        },
+        {
+          "query": "what does the user prefer to drink in the afternoon?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_drink_old"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_drink_new",
+            "mem_t_drink_old",
+            "mem_pref_meeting",
+            "mem_dist_33",
+            "mem_sh_lasagna",
+            "mem_pref_keyboard",
+            "mem_dist_43",
+            "mem_dist_20",
+            "mem_dist_23",
+            "mem_dist_39"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.5,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 313.1920120013092
+        },
+        {
+          "query": "what is the user's job title?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_title_old"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_title_new",
+            "mem_t_title_old",
+            "mem_mh_rivendell_join",
+            "mem_mh_alice_lead",
+            "mem_mh_apollo_oncall",
+            "mem_mh_bob_growth",
+            "mem_dist_26",
+            "mem_sh_passport",
+            "mem_mh_apollo_owner",
+            "mem_mh_carla_design"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.5,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 337.5934550003876
+        },
+        {
+          "query": "which city does the user live in?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_city_new"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_city_old",
+            "mem_t_city_new",
+            "mem_t_title_old",
+            "mem_t_title_new",
+            "mem_sh_passport",
+            "mem_sh_allergy",
+            "mem_mh_rivendell_join",
+            "mem_mh_growth_tokyo",
+            "mem_sh_mortgage",
+            "mem_sh_marathon"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.5,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 356.2481589997333
+        },
+        {
+          "query": "who is the current project lead for the cobalt initiative?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_lead_new"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_lead_old",
+            "mem_t_lead_new",
+            "mem_mh_rivendell_join",
+            "mem_mh_alice_lead",
+            "mem_mh_carla_design",
+            "mem_mh_apollo_owner",
+            "mem_sh_canary",
+            "mem_mh_bob_growth",
+            "mem_t_title_new",
+            "mem_t_title_old"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.5,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 341.57475600113685
+        },
+        {
+          "query": "what kind of keyboards does the user like?",
+          "category": "preference",
+          "gold_memory_ids": [
+            "mem_pref_keyboard"
+          ],
+          "retrieved_memory_ids": [
+            "mem_pref_keyboard",
+            "mem_dist_15",
+            "mem_sh_lasagna",
+            "mem_t_title_new",
+            "mem_t_drink_old",
+            "mem_t_drink_new",
+            "mem_t_title_old",
+            "mem_sh_allergy",
+            "mem_t_city_new",
+            "mem_t_city_old"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 358.0836179990001
+        },
+        {
+          "query": "when does the user not want to be scheduled for meetings?",
+          "category": "preference",
+          "gold_memory_ids": [
+            "mem_pref_meeting"
+          ],
+          "retrieved_memory_ids": [
+            "mem_pref_meeting",
+            "mem_dist_32",
+            "mem_dist_26",
+            "mem_dist_31",
+            "mem_sh_dentist",
+            "mem_dist_22",
+            "mem_t_drink_new",
+            "mem_mh_apollo_oncall",
+            "mem_dist_00",
+            "mem_dist_23"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 359.16182400069374
+        }
+      ],
+      "precision_at_k": 0.13,
+      "recall_at_k": 1.0,
+      "mrr": 0.9,
+      "hit_at_1": 0.8,
+      "hit_at_5": 1.0,
+      "latency_p50_ms": 350.6388480000169,
+      "latency_p95_ms": 616.8812432003506,
+      "latency_mean_ms": 391.8623085501167,
+      "ram_peak_mb": 1845.828125,
+      "ingest_seconds": 35.35549172799983,
+      "by_category": {
+        "single-hop": {
+          "n": 8.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "multi-hop": {
+          "n": 6.0,
+          "precision_at_k": 0.20000000000000004,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "temporal": {
+          "n": 4.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 0.5,
+          "hit_at_1": 0.0
+        },
+        "preference": {
+          "n": 2.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        }
+      },
+      "mode": "retrieval-only",
+      "tokens_used": 0,
+      "ingest_p50_ms": 0.0
+    },
+    {
+      "engine": "llamaindex",
+      "status": "OK",
+      "n_cases": 20,
+      "queries": [
+        {
+          "query": "what is my favorite dinner recipe?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_lasagna"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_lasagna",
+            "mem_sh_allergy",
+            "mem_dist_33",
+            "mem_dist_23",
+            "mem_dist_39",
+            "mem_t_drink_new",
+            "mem_mh_rivendell_stack",
+            "mem_t_drink_old",
+            "mem_dist_45",
+            "mem_sh_birthday"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 404.20613800051797
+        },
+        {
+          "query": "when is my dentist appointment at SmileBright?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_dentist"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_dentist",
+            "mem_pref_meeting",
+            "mem_dist_37",
+            "mem_dist_39",
+            "mem_dist_33",
+            "mem_dist_22",
+            "mem_dist_32",
+            "mem_dist_26",
+            "mem_dist_23",
+            "mem_dist_44"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 670.3500820003683
+        },
+        {
+          "query": "which marathon did I sign up for?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_marathon"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_marathon",
+            "mem_dist_42",
+            "mem_mh_study_phase",
+            "mem_dist_37",
+            "mem_dist_25",
+            "mem_dist_17",
+            "mem_mh_bob_growth",
+            "mem_mh_storage_deadline",
+            "mem_dist_48",
+            "mem_sh_dentist"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 356.278237000879
+        },
+        {
+          "query": "what does the canary-bench project measure?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_canary"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_canary",
+            "mem_t_lead_old",
+            "mem_mh_study_drug",
+            "mem_t_lead_new",
+            "mem_mh_study_phase",
+            "mem_dist_01",
+            "mem_mh_rivendell_stack",
+            "mem_dist_42",
+            "mem_dist_10",
+            "mem_mh_apollo_owner"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 349.19480600001407
+        },
+        {
+          "query": "what is my passport number?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_passport"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_passport",
+            "mem_dist_30",
+            "mem_dist_25",
+            "mem_dist_28",
+            "mem_dist_29",
+            "mem_sh_marathon",
+            "mem_dist_14",
+            "mem_dist_21",
+            "mem_dist_12",
+            "mem_dist_11"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 389.0221149995341
+        },
+        {
+          "query": "when is my mother's birthday?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_birthday"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_birthday",
+            "mem_mh_storage_deadline",
+            "mem_sh_passport",
+            "mem_dist_41",
+            "mem_dist_48",
+            "mem_dist_38",
+            "mem_dist_33",
+            "mem_dist_32",
+            "mem_dist_37",
+            "mem_sh_dentist"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 411.8380800009618
+        },
+        {
+          "query": "how much is my monthly mortgage payment?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_mortgage"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_mortgage",
+            "mem_dist_25",
+            "mem_dist_29",
+            "mem_sh_canary",
+            "mem_sh_dentist",
+            "mem_dist_46",
+            "mem_dist_40",
+            "mem_dist_23",
+            "mem_dist_44",
+            "mem_dist_22"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 325.8335270002135
+        },
+        {
+          "query": "what foods am I allergic to?",
+          "category": "single-hop",
+          "gold_memory_ids": [
+            "mem_sh_allergy"
+          ],
+          "retrieved_memory_ids": [
+            "mem_sh_allergy",
+            "mem_sh_lasagna",
+            "mem_dist_23",
+            "mem_dist_33",
+            "mem_mh_study_drug",
+            "mem_dist_38",
+            "mem_dist_39",
+            "mem_dist_32",
+            "mem_dist_18",
+            "mem_mh_study_phase"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 311.28922700008843
+        },
+        {
+          "query": "when is alice's team's bigtable migration due?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_alice_lead",
+            "mem_mh_storage_deadline"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_storage_deadline",
+            "mem_mh_alice_lead",
+            "mem_sh_canary",
+            "mem_mh_design_figma",
+            "mem_dist_13",
+            "mem_mh_bob_growth",
+            "mem_dist_07",
+            "mem_mh_growth_tokyo",
+            "mem_dist_01",
+            "mem_mh_rivendell_stack"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 350.88980100044864
+        },
+        {
+          "query": "what is the stack of the project I joined as principal engineer?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_rivendell_join",
+            "mem_mh_rivendell_stack"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_rivendell_join",
+            "mem_t_title_old",
+            "mem_t_title_new",
+            "mem_mh_rivendell_stack",
+            "mem_mh_apollo_owner",
+            "mem_mh_alice_lead",
+            "mem_t_lead_new",
+            "mem_t_lead_old",
+            "mem_mh_carla_design",
+            "mem_mh_bob_growth"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 395.8335850002186
+        },
+        {
+          "query": "where is the team bob runs based?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_bob_growth",
+            "mem_mh_growth_tokyo",
+            "mem_sh_marathon",
+            "mem_dist_42",
+            "mem_mh_apollo_owner",
+            "mem_mh_carla_design",
+            "mem_dist_44",
+            "mem_mh_storage_deadline",
+            "mem_t_lead_old",
+            "mem_mh_rivendell_join"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 351.83200200117426
+        },
+        {
+          "query": "what trial phase is dr. mendes' molecule in?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_study_drug",
+            "mem_mh_study_phase"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_study_drug",
+            "mem_mh_study_phase",
+            "mem_t_lead_old",
+            "mem_mh_rivendell_join",
+            "mem_sh_dentist",
+            "mem_mh_apollo_owner",
+            "mem_sh_canary",
+            "mem_t_lead_new",
+            "mem_dist_00",
+            "mem_mh_bob_growth"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 337.6965299994481
+        },
+        {
+          "query": "which design tool did carla's team migrate to?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_carla_design",
+            "mem_mh_design_figma"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_carla_design",
+            "mem_mh_design_figma",
+            "mem_mh_rivendell_join",
+            "mem_mh_storage_deadline",
+            "mem_mh_alice_lead",
+            "mem_t_lead_old",
+            "mem_t_lead_new",
+            "mem_mh_bob_growth",
+            "mem_t_title_new",
+            "mem_mh_apollo_owner"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 314.4612579999375
+        },
+        {
+          "query": "how does the team that owns project apollo handle on-call?",
+          "category": "multi-hop",
+          "gold_memory_ids": [
+            "mem_mh_apollo_owner",
+            "mem_mh_apollo_oncall"
+          ],
+          "retrieved_memory_ids": [
+            "mem_mh_apollo_owner",
+            "mem_mh_apollo_oncall",
+            "mem_dist_26",
+            "mem_t_title_new",
+            "mem_t_title_old",
+            "mem_mh_storage_deadline",
+            "mem_dist_32",
+            "mem_t_lead_new",
+            "mem_mh_growth_tokyo",
+            "mem_mh_bob_growth"
+          ],
+          "metrics": {
+            "precision_at_k": 0.2,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 327.1369570011302
+        },
+        {
+          "query": "what does the user prefer to drink in the afternoon?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_drink_old"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_drink_new",
+            "mem_t_drink_old",
+            "mem_pref_meeting",
+            "mem_dist_33",
+            "mem_sh_lasagna",
+            "mem_pref_keyboard",
+            "mem_dist_43",
+            "mem_dist_20",
+            "mem_dist_23",
+            "mem_dist_39"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.5,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 366.5742740013229
+        },
+        {
+          "query": "what is the user's job title?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_title_old"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_title_new",
+            "mem_t_title_old",
+            "mem_mh_rivendell_join",
+            "mem_mh_alice_lead",
+            "mem_mh_bob_growth",
+            "mem_mh_apollo_oncall",
+            "mem_dist_26",
+            "mem_sh_passport",
+            "mem_mh_apollo_owner",
+            "mem_mh_carla_design"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.5,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 573.9862449991051
+        },
+        {
+          "query": "which city does the user live in?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_city_new"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_city_old",
+            "mem_t_city_new",
+            "mem_t_title_old",
+            "mem_t_title_new",
+            "mem_sh_passport",
+            "mem_sh_allergy",
+            "mem_mh_rivendell_join",
+            "mem_mh_growth_tokyo",
+            "mem_sh_mortgage",
+            "mem_sh_marathon"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.5,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 318.35975400099414
+        },
+        {
+          "query": "who is the current project lead for the cobalt initiative?",
+          "category": "temporal",
+          "gold_memory_ids": [
+            "mem_t_lead_new"
+          ],
+          "retrieved_memory_ids": [
+            "mem_t_lead_old",
+            "mem_t_lead_new",
+            "mem_mh_rivendell_join",
+            "mem_mh_alice_lead",
+            "mem_mh_carla_design",
+            "mem_mh_apollo_owner",
+            "mem_sh_canary",
+            "mem_mh_bob_growth",
+            "mem_t_title_new",
+            "mem_t_title_old"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 0.5,
+            "hit_at_1": 0.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 325.7339609990595
+        },
+        {
+          "query": "what kind of keyboards does the user like?",
+          "category": "preference",
+          "gold_memory_ids": [
+            "mem_pref_keyboard"
+          ],
+          "retrieved_memory_ids": [
+            "mem_pref_keyboard",
+            "mem_dist_15",
+            "mem_sh_lasagna",
+            "mem_t_title_new",
+            "mem_t_drink_old",
+            "mem_t_drink_new",
+            "mem_t_title_old",
+            "mem_sh_allergy",
+            "mem_t_city_new",
+            "mem_t_city_old"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 320.8347149993642
+        },
+        {
+          "query": "when does the user not want to be scheduled for meetings?",
+          "category": "preference",
+          "gold_memory_ids": [
+            "mem_pref_meeting"
+          ],
+          "retrieved_memory_ids": [
+            "mem_pref_meeting",
+            "mem_dist_32",
+            "mem_dist_26",
+            "mem_dist_31",
+            "mem_sh_dentist",
+            "mem_dist_22",
+            "mem_t_drink_new",
+            "mem_mh_apollo_oncall",
+            "mem_dist_00",
+            "mem_dist_23"
+          ],
+          "metrics": {
+            "precision_at_k": 0.1,
+            "recall_at_k": 1.0,
+            "mrr": 1.0,
+            "hit_at_1": 1.0,
+            "hit_at_5": 1.0
+          },
+          "latency_ms": 625.6843119990663
+        }
+      ],
+      "precision_at_k": 0.13,
+      "recall_at_k": 1.0,
+      "mrr": 0.9,
+      "hit_at_1": 0.8,
+      "hit_at_5": 1.0,
+      "latency_p50_ms": 351.36090150081145,
+      "latency_p95_ms": 627.9176004991314,
+      "latency_mean_ms": 391.35178030019233,
+      "ram_peak_mb": 1855.390625,
+      "ingest_seconds": 1.39623306500107,
+      "by_category": {
+        "single-hop": {
+          "n": 8.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "multi-hop": {
+          "n": 6.0,
+          "precision_at_k": 0.20000000000000004,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        },
+        "temporal": {
+          "n": 4.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 0.5,
+          "hit_at_1": 0.0
+        },
+        "preference": {
+          "n": 2.0,
+          "precision_at_k": 0.1,
+          "recall_at_k": 1.0,
+          "mrr": 1.0,
+          "hit_at_1": 1.0
+        }
+      },
+      "mode": "retrieval-only",
+      "tokens_used": 0,
+      "ingest_p50_ms": 0.0
+    }
+  ]
+}

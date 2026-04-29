@@ -1,0 +1,42 @@
+# Local DB & logs
+.memoirs/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+# But the seeded demo DB is committed so the README screenshots reproduce.
+!data/demo/memoirs_demo.sqlite
+data/demo/snapshots/*.sqlite
+
+# External eval data (download via setup script, not committed)
+data/longmemeval/
+data/locomo/
+data/memoryagentbench/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+.coverage.*
+.coverage_html/
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# Models (heavy GGUF — downloaded by `memoirs setup`)
+models/*.gguf
+*.gguf
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+
+# OS
+.DS_Store

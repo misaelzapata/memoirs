@@ -1,0 +1,38 @@
+# memoirs — local-first memory engine
+# Run:  docker compose up -d
+# Stop: docker compose down
+#
+# This compose file runs the *daemon* (watch + extract). The MCP server is
+# meant to be invoked per-request (stdio); not exposed as a long-lived service.
+services:
+  memoirs:
+    build: .
+    image: memoirs:latest
+    container_name: memoirs
+    restart: unless-stopped
+    volumes:
+      # Persistent DB + logs
+      - ./data:/data
+      # Models cache (Gemma GGUF, sentence-transformers downloads, spaCy)
+      - ${HOME}/.local/share/memoirs:/root/.local/share/memoirs
+      # Optional: ingest your local Claude Code transcripts (read-only)
+      - ${HOME}/.claude/projects:/host/claude-projects:ro
+    environment:
+      # GPU offload (Vulkan) — needs --gpus all + Vulkan-capable host driver
+      MEMOIRS_GEMMA_GPU_LAYERS: "0"
+    # Run the daemon: watch host's claude-projects + extract+consolidate continuously
+    command:
+      - "extract"
+      - "--daemon"
+      - "--poll-interval"
+      - "60"
+      - "--auto-consolidate"
+      - "--max-load"
+      - "0.85"
+    # Healthcheck via doctor (exit code 0 if all checks pass)
+    healthcheck:
+      test: ["CMD", "memoirs", "--db", "/data/memoirs.sqlite", "doctor"]
+      interval: 5m
+      timeout: 30s
+      start_period: 30s
+      retries: 3

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "memoirs": {
+      "command": "/home/misael/Desktop/projects/memoirs/.venv/bin/memoirs",
+      "args": [
+        "--db",
+        "/home/misael/Desktop/projects/memoirs/.memoirs/memoirs.sqlite",
+        "mcp"
+      ]
+    }
+  }
+}

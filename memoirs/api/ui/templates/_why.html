@@ -1,0 +1,68 @@
+{# P1-9 — provenance chain timeline (chain-of-memory).
+   Rendered as a vertical step list with arrows so the user can read the
+   path from the query down to the target memory. Each step kind has a
+   slightly different inline layout to surface the most relevant fields.
+#}
+{% if not chain %}
+<p class="text-xs text-slate-400">no provenance chain available.</p>
+{% else %}
+<ol class="space-y-3 text-sm" data-testid="why-chain">
+    {% for step in chain %}
+    <li class="relative pl-6">
+        {% if not loop.last %}
+        <span class="absolute left-2 top-6 bottom-[-12px] w-px bg-slate-300"></span>
+        {% endif %}
+        <span class="absolute left-0 top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-700">
+            {{ step.step }}
+        </span>
+        <div class="flex flex-wrap items-baseline gap-2">
+            <span class="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-mono uppercase tracking-wider text-slate-700">
+                {{ step.kind }}
+            </span>
+            {% if step.kind == "query" %}
+                <span class="italic text-slate-700">"{{ step.value or query }}"</span>
+            {% elif step.kind == "entity_match" %}
+                <span class="text-slate-800 font-semibold">{{ step.entity }}</span>
+                <span class="text-xs text-slate-500">conf {{ "%.2f"|format(step.confidence or 0) }}</span>
+            {% elif step.kind == "entity_relation" %}
+                <span class="text-slate-700">{{ step["from"] }}</span>
+                <span class="text-slate-400">&rarr;</span>
+                <span class="text-xs text-slate-500 italic">{{ step.relation or "related_to" }}</span>
+                <span class="text-slate-400">&rarr;</span>
+                <span class="text-slate-700">{{ step["to"] }}</span>
+            {% elif step.kind == "entity_to_memory" %}
+                <span class="text-slate-700">{{ step.entity }}</span>
+                <span class="text-slate-400">&rarr;</span>
+                <a class="font-mono text-xs text-blue-700 hover:underline"
+                   href="/ui/memories/{{ step.memory_id }}">{{ step.memory_id }}</a>
+            {% elif step.kind == "memory_to_entity" %}
+                <a class="font-mono text-xs text-blue-700 hover:underline"
+                   href="/ui/memories/{{ step.memory_id }}">{{ step.memory_id }}</a>
+                <span class="text-slate-400">&rarr;</span>
+                <span class="text-slate-700">{{ step.entity }}</span>
+            {% elif step.kind == "memory_link" %}
+                <a class="font-mono text-xs text-blue-700 hover:underline"
+                   href="/ui/memories/{{ step['from'] }}">{{ step["from"] }}</a>
+                <span class="text-slate-400">&rarr;</span>
+                <a class="font-mono text-xs text-blue-700 hover:underline"
+                   href="/ui/memories/{{ step['to'] }}">{{ step["to"] }}</a>
+                <span class="text-xs text-slate-500">
+                    sim {{ "%.3f"|format(step.similarity or 0) }} · {{ step.reason or "semantic" }}
+                </span>
+            {% elif step.kind == "semantic_match" %}
+                <span class="text-slate-600">
+                    matched via dense / BM25 retrieval &mdash;
+                    score {{ "%.3f"|format(step.score or 0) }}
+                </span>
+            {% elif step.kind == "not_found" %}
+                <span class="text-rose-600">
+                    memory <code>{{ step.memory_id }}</code> not found
+                </span>
+            {% else %}
+                <span class="text-slate-500">{{ step }}</span>
+            {% endif %}
+        </div>
+    </li>
+    {% endfor %}
+</ol>
+{% endif %}

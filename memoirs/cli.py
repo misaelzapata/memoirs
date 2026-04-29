@@ -1,0 +1,3558 @@
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import os
+import sys
+from pathlib import Path
+
+from .db import MemoirsDB
+from .mcp import main as mcp_main
+from .watch import ingest_path, scan_once, watch_path
+
+
+DEFAULT_DB = Path(os.environ.get("MEMOIRS_DB", ".memoirs/memoirs.sqlite"))
+
+
+def _log_path_for(db_path: str | Path) -> Path:
+    """Place memoirs.log next to the SQLite DB so MCP servers launched from any
+    cwd still write to the same log."""
+    return Path(db_path).resolve().parent / "memoirs.log"
+
+
+def _configure_logging(db_path: str | Path | None = None, verbose: bool = False) -> Path:
+    """Configure root logger: stderr + rotating file handler at <db-dir>/memoirs.log.
+
+    Rotation: 10 MB per file, 5 backups. Long-running daemons / watchers keep
+    the log file from growing unbounded.
+    """
+    from logging.handlers import RotatingFileHandler
+
+    log_file = _log_path_for(db_path or DEFAULT_DB)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    fmt = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG if verbose else logging.INFO)
+    for h in list(root.handlers):
+        root.removeHandler(h)
+    sh = logging.StreamHandler(sys.stderr)
+    sh.setFormatter(fmt)
+    sh.setLevel(logging.DEBUG if verbose else logging.INFO)
+    root.addHandler(sh)
+    fh = RotatingFileHandler(log_file, maxBytes=10 * 1024 * 1024, backupCount=5)
+    fh.setFormatter(fmt)
+    fh.setLevel(logging.DEBUG)
+    root.addHandler(fh)
+    return log_file
+
+
+def _make_reporter():
+    """Return a reporter that prints to stdout AND logs to memoirs.log."""
+    log = logging.getLogger("memoirs")
+
+    def report(msg: str) -> None:
+        print(msg)
+        log.info(msg)
+
+    return report
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="memoirs", description="Local memory ingestion engine")
+    parser.add_argument("--db", default=str(DEFAULT_DB), help="SQLite database path")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    subparsers.add_parser("init", help="create or upgrade the SQLite schema")
+
+    ingest = subparsers.add_parser("ingest", help="ingest one supported file now")
+    ingest.add_argument("path", help="file or directory to ingest (.md, .jsonl, .json, .zip, or a Claude.ai export)")
+    ingest.add_argument(
+        "--kind",
+        choices=["auto", "claude-export"],
+        default="auto",
+        help="force a specific ingester. 'claude-export' parses an official "
+             "Claude.ai data export (zip or extracted directory).",
+    )
+
+    watch = subparsers.add_parser("watch", help="automatically ingest a file or folder when it changes")
+    watch.add_argument("path", help="file or folder to watch")
+    watch.add_argument("--interval", type=float, default=2.0, help="polling interval in seconds")
+    watch.add_argument("--once", action="store_true", help="scan once and exit")
+    watch.add_argument("--realtime", action="store_true", help="use watchdog/inotify if available (instant) instead of polling")
+
+    subparsers.add_parser("status", help="show database counts and recent import runs")
+
+    subparsers.add_parser("doctor", help="health check: deps, models, DB, GPU, MCP clients, daemon")
+
+    setup = subparsers.add_parser("setup", help="one-command install: deps, models, DB init, MCP clients, instruction snippets")
+    setup.add_argument("--yes", "-y", action="store_true", help="non-interactive, accept all")
+    setup.add_argument("--skip-gemma", action="store_true", help="skip Gemma GGUF download (~1.6 GB)")
+    setup.add_argument("--skip-mcp", action="store_true", help="skip MCP client config + instruction snippets")
+
+    daemon = subparsers.add_parser("daemon", help="manage the memoirs daemon (watch + extract + consolidate)")
+    daemon_sub = daemon.add_subparsers(dest="daemon_cmd", required=True)
+    d_start = daemon_sub.add_parser("start", help="start daemon in background (writes pidfile)")
+    d_start.add_argument("--watch-path", default=str(Path.home() / ".claude" / "projects"))
+    d_start.add_argument("--poll-interval", type=int, default=60)
+    d_start.add_argument("--max-load", type=float, default=0.85)
+    d_start.add_argument(
+        "--no-sleep", action="store_true",
+        help="skip the sleep-time async consolidation worker (P1-4)",
+    )
+    d_start.add_argument(
+        "--embed-pool", type=int, default=0, metavar="N",
+        help=(
+            "spawn an N-worker process pool for sentence-transformers embeds "
+            "(GIL-bypass; ~200 MB RAM per worker). 0 disables (default). Sets "
+            "MEMOIRS_EMBED_BACKEND=process_pool + MEMOIRS_EMBED_POOL_WORKERS=N "
+            "in the spawned daemon environment."
+        ),
+    )
+    daemon_sub.add_parser("stop", help="stop the daemon (graceful SIGTERM)")
+    daemon_sub.add_parser("status", help="show daemon PID, uptime, recent activity")
+    daemon_sub.add_parser("restart")
+
+    sleep_cmd = subparsers.add_parser(
+        "sleep",
+        help="sleep-time async consolidation: idle-time housekeeping (P1-4)",
+    )
+    sleep_sub = sleep_cmd.add_subparsers(dest="sleep_cmd", required=True)
+    s_run = sleep_sub.add_parser(
+        "run-once",
+        help="run a single sleep cycle now (ignores idle/load pre-conditions)",
+    )
+    s_run.add_argument(
+        "--jobs", default=None,
+        help=(
+            "comma-separated subset of jobs to run "
+            "(consolidate,dedup,link_rebuild,prune,contradictions). "
+            "Defaults to all."
+        ),
+    )
+    s_run.add_argument(
+        "--respect-preconditions", action="store_true",
+        help="honor idle/load gates instead of forcing the cycle",
+    )
+    sleep_sub.add_parser("status", help="show last run, next ETA, registered jobs")
+    s_hist = sleep_sub.add_parser("history", help="list recent sleep_runs entries")
+    s_hist.add_argument("--limit", type=int, default=10)
+    s_hist.add_argument("--json", action="store_true")
+    sleep_sub.add_parser(
+        "loop",
+        help="run the sleep scheduler in the foreground (used by the daemon)",
+    )
+
+    logs = subparsers.add_parser("logs", help="show or tail the memoirs log file")
+    logs.add_argument("--tail", type=int, default=50, help="lines to show (default 50)")
+    logs.add_argument("--follow", "-f", action="store_true", help="follow new log lines (like tail -f)")
+    logs.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default=None,
+        help="render each line as parsed JSON ('json') or raw text. Default: "
+             "auto (raw lines passed through).",
+    )
+
+    subparsers.add_parser(
+        "trace-id",
+        help="print the trace_id active in the current process (mostly empty "
+             "outside a request; useful as a sanity check from a wrapper script)",
+    )
+
+    conversations = subparsers.add_parser("conversations", help="list imported conversations")
+    conversations.add_argument("--json", action="store_true", help="print JSON instead of a table")
+
+    messages = subparsers.add_parser("messages", help="show active messages")
+    messages.add_argument("--conversation-id", help="filter by conversation id")
+    messages.add_argument("--limit", type=int, default=20, help="maximum messages to print")
+    messages.add_argument("--json", action="store_true", help="print JSON instead of text")
+
+    subparsers.add_parser("mcp", help="run the MCP stdio server")
+
+    serve = subparsers.add_parser("serve", help="run REST API server (FastAPI), default :8283")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8283)
+    serve.add_argument(
+        "--embed-pool", type=int, default=0, metavar="N",
+        help=(
+            "use an N-worker process pool for sentence-transformers embeds "
+            "(GIL-bypass; ~200 MB RAM per worker). 0 disables (default). Sets "
+            "MEMOIRS_EMBED_BACKEND=process_pool for the duration of the run."
+        ),
+    )
+
+    ui = subparsers.add_parser(
+        "ui",
+        help="run the local web inspector (HTMX + Tailwind, no build step). "
+             "Mounts only the /ui blueprint so it works without the full API.",
+    )
+    ui.add_argument("--host", default="127.0.0.1")
+    ui.add_argument("--port", type=int, default=8284)
+
+    extract = subparsers.add_parser("extract", help="run extraction (Layer 2) over conversations without candidates yet")
+    extract.add_argument("--limit", type=int, default=50)
+    extract.add_argument("--reprocess-with-gemma", action="store_true", help="select conversations that have spaCy candidates but no Gemma candidates and reprocess them")
+    extract.add_argument("--daemon", action="store_true", help="run forever: poll for new conversations and extract continuously")
+    extract.add_argument("--poll-interval", type=int, default=60, help="seconds to wait between polls when daemon idle (default 60)")
+    extract.add_argument("--auto-consolidate", action="store_true", help="run consolidate after each extraction batch (daemon mode)")
+    extract.add_argument("--max-load", type=float, default=0.85, help="pause daemon when system load1 / cpu_count exceeds this ratio (default 0.85). Lower = nicer to other workloads")
+    extract.add_argument("--min-free-mem-mb", type=int, default=2048, help="pause daemon when free memory drops below this (MB, default 2048)")
+
+    consolidate = subparsers.add_parser("consolidate", help="consolidate pending memory candidates into memories (Layer 5.1)")
+    consolidate.add_argument("--limit", type=int, default=100)
+    consolidate.add_argument(
+        "--curator",
+        choices=["gemma", "heuristic", "auto"],
+        default=None,
+        help=(
+            "Curator backend: 'gemma' forces the local curator LLM (falls "
+            "back to heuristic if the model is missing/garbled), 'heuristic' "
+            "disables the LLM entirely, 'auto' (default when env not set) "
+            "prefers the LLM when available. Sets MEMOIRS_CURATOR_ENABLED "
+            "(and the legacy MEMOIRS_GEMMA_CURATOR) for the duration of this "
+            "command."
+        ),
+    )
+
+    maintenance = subparsers.add_parser(
+        "maintenance",
+        help="recompute scores, expire / archive low-value memories (Layer 5.2)",
+    )
+    maintenance.add_argument(
+        "--enrich-decisions",
+        action="store_true",
+        help=(
+            "After the standard maintenance pass, re-evaluate active memories "
+            "with lifecycle_decisions.should_archive and apply any matches "
+            "(P1-10). Off by default — opt in for an aggressive prune."
+        ),
+    )
+
+    cleanup = subparsers.add_parser("cleanup", help="merge near-duplicate memorias and flag contradictions (Layer 5.5)")
+    cleanup.add_argument("--threshold", type=float, default=0.92, help="cosine sim threshold (default 0.92)")
+    cleanup.add_argument("--dry-run", action="store_true", help="report only, don't merge")
+    cleanup.add_argument("--limit", type=int, default=None, help="cap memorias scanned (debug)")
+
+    audit = subparsers.add_parser("audit", help="Gemma curation pass: detects misclassified / generic / noisy memorias (Layer 5)")
+    audit.add_argument("--limit", type=int, default=50, help="memorias to audit (default 50, lowest-score first)")
+    audit.add_argument("--batch-size", type=int, default=5, help="memorias per Gemma call (default 5)")
+    audit.add_argument("--type", help="filter by memory type")
+    audit.add_argument("--apply", action="store_true", help="apply changes (default: dry-run report only)")
+
+    ask = subparsers.add_parser("ask", help="assemble compact memory context for a query (Layer 5.6)")
+    ask.add_argument("query")
+    ask.add_argument("--top-k", type=int, default=20)
+    ask.add_argument("--max-lines", type=int, default=15)
+    ask.add_argument("--as-of", help="ISO timestamp for time-travel queries (e.g. 2026-01-15T00:00:00+00:00)")
+
+    why = subparsers.add_parser(
+        "why",
+        help="trace the provenance chain from a query to a memory (P1-9 chain-of-memory)",
+    )
+    why.add_argument("memory_id", help="target memory id")
+    why.add_argument("--query", "-q", default="", help="user query to seed entity extraction")
+    why.add_argument("--max-hops", type=int, default=3, help="cap on edges in the BFS (default 3)")
+    why.add_argument("--json", action="store_true", help="emit the chain as JSON instead of a table")
+
+    idx_ent = subparsers.add_parser("index-entities", help="extract entities for memories not yet linked (Layer 3)")
+    idx_ent.add_argument(
+        "--use-llm",
+        dest="use_llm",
+        action="store_true",
+        default=None,
+        help="force the LLM-based extractor (default: auto via MEMOIRS_GRAPH_LLM)",
+    )
+    idx_ent.add_argument(
+        "--no-llm",
+        dest="use_llm",
+        action="store_false",
+        help="force the heuristic extractor (overrides MEMOIRS_GRAPH_LLM)",
+    )
+
+    subparsers.add_parser("projects-refresh", help="re-derive project entities from conversations.cwd metadata (use after ingest)")
+
+    trace = subparsers.add_parser("trace", help="show source -> messages -> candidates -> memories chain for a conversation")
+    trace.add_argument("conversation_id", help="conversation id (full or prefix)")
+    trace.add_argument("--json", action="store_true")
+
+    graph = subparsers.add_parser("graph", help="render interactive HTML graphs (entities, decisions, memory neighborhood)")
+    graph_sub = graph.add_subparsers(dest="graph_cmd", required=True)
+    g_ent = graph_sub.add_parser("entities", help="entity graph (full or per-project)")
+    g_ent.add_argument("--project", help="restrict to a project entity")
+    g_ent.add_argument("--limit", type=int, default=200, help="max entities (default 200)")
+    g_ent.add_argument("--no-memories", action="store_true", help="don't render memory nodes attached to entities")
+    g_ent.add_argument("--max-mem-per-entity", type=int, default=3, help="top-N memories per entity (default 3)")
+    g_ent.add_argument("--include-facts", action="store_true", help="include 'fact' memorias (off by default — too noisy)")
+    g_ent.add_argument("--out", help="output HTML path (default .memoirs/graphs/entities.html)")
+    g_ent.add_argument("--watch", type=int, default=0, help="re-render every N seconds; the open page reloads automatically")
+    g_dec = graph_sub.add_parser("decisions", help="decision flow for one conversation")
+    g_dec.add_argument("conversation_id")
+    g_dec.add_argument("--out")
+    g_dec.add_argument("--watch", type=int, default=0)
+    g_mem = graph_sub.add_parser("memory", help="memory neighborhood (entities + sibling memories)")
+    g_mem.add_argument("memory_id")
+    g_mem.add_argument("--depth", type=int, default=2)
+    g_mem.add_argument("--out")
+    g_mem.add_argument("--watch", type=int, default=0)
+    graph_sub.add_parser("list", help="list previously rendered graphs in .memoirs/graphs/")
+
+    links = subparsers.add_parser("links", help="A-MEM Zettelkasten memory↔memory links (P1-3)")
+    links_sub = links.add_subparsers(dest="links_cmd", required=True)
+    l_rebuild = links_sub.add_parser("rebuild", help="recompute links over the whole corpus")
+    l_rebuild.add_argument("--top-k", type=int, default=5, help="neighbors per memory (default 5)")
+    l_rebuild.add_argument("--threshold", type=float, default=0.55,
+                           help="similarity gate; meaning depends on --mode "
+                                "(absolute: min cosine; adaptive: percentile in [0,1]; "
+                                "zscore: stdevs above local mean)")
+    l_rebuild.add_argument("--mode", choices=["topk", "absolute", "adaptive", "zscore"],
+                           default="topk",
+                           help="link selection strategy (default topk — bounded fan-out per memory)")
+    l_rebuild.add_argument("--batch-size", type=int, default=100)
+    l_rebuild.add_argument("--no-shared-entities", action="store_true", help="skip shared_entity links")
+    l_show = links_sub.add_parser("show", help="show neighbors of a memory")
+    l_show.add_argument("memory_id", help="memory id (full or prefix)")
+    l_show.add_argument("--depth", type=int, default=1, help="hops to traverse (default 1)")
+    l_show.add_argument("--min-similarity", type=float, default=0.5)
+    l_show.add_argument("--reason", action="append", help="filter by reason (repeatable: semantic, shared_entity)")
+    l_show.add_argument("--json", action="store_true")
+
+    l_prune = links_sub.add_parser(
+        "prune",
+        help="trim memory_links to bound per-source fan-out and/or drop low-similarity rows",
+    )
+    l_prune.add_argument("--max-per-memory", type=int, default=10,
+                         help="keep at most N highest-similarity links per source (default 10)")
+    l_prune.add_argument("--min-similarity", type=float, default=None,
+                         help="also drop any link with similarity below this floor")
+    l_prune.add_argument("--reason", default=None,
+                         help="only affect links with this reason (e.g. semantic, shared_entity)")
+    l_prune.add_argument("--dry-run", action="store_true",
+                         help="report what would be deleted without modifying the DB")
+
+    l_stats = links_sub.add_parser("stats", help="print summary stats over memory_links")
+    l_stats.add_argument("--json", action="store_true")
+
+    raptor = subparsers.add_parser(
+        "raptor",
+        help="RAPTOR hierarchical summary tree (P1-6)",
+    )
+    raptor_sub = raptor.add_subparsers(dest="raptor_cmd", required=True)
+    r_build = raptor_sub.add_parser("build", help="build the summary tree for a scope")
+    r_build.add_argument("--scope", choices=["global", "project", "conversation"],
+                         default="global")
+    r_build.add_argument("--scope-id", default=None,
+                         help="project name (lowercase) or conversation id")
+    r_build.add_argument("--max-levels", type=int, default=4)
+    r_build.add_argument("--k-per-cluster", type=int, default=8,
+                         help="target avg cluster size — K-means K = n / k_per_cluster")
+    r_build.add_argument("--rebuild", action="store_true",
+                         help="wipe existing tree for the scope first")
+    r_build.add_argument("--use-llm", action="store_true",
+                         help="use Gemma to summarize clusters (otherwise heuristic)")
+    r_stats = raptor_sub.add_parser("stats", help="show levels and counts per scope")
+    r_stats.add_argument("--scope", choices=["global", "project", "conversation"],
+                         default=None)
+    r_stats.add_argument("--scope-id", default=None)
+    r_stats.add_argument("--json", action="store_true")
+    r_show = raptor_sub.add_parser("show", help="display a summary node + its members")
+    r_show.add_argument("node_id", help="summary node id (full or prefix)")
+    r_show.add_argument("--recursive", action="store_true",
+                        help="walk children recursively")
+    r_show.add_argument("--json", action="store_true")
+    r_query = raptor_sub.add_parser("query", help="raptor-style descent retrieval")
+    r_query.add_argument("query")
+    r_query.add_argument("--top-k", type=int, default=10)
+    r_query.add_argument("--scope", choices=["global", "project", "conversation"],
+                         default="global")
+    r_query.add_argument("--scope-id", default=None)
+    r_query.add_argument("--prefer-high-level", action="store_true",
+                         help="bias scoring toward broader summaries")
+    r_query.add_argument("--json", action="store_true")
+
+    review = subparsers.add_parser("review", help="approve/reject memory candidates interactively or in batch")
+    review.add_argument("--limit", type=int, default=20, help="how many pending candidates to show")
+    review.add_argument("--type", help="filter by memory type")
+    review.add_argument("--auto-accept", action="store_true", help="auto-accept all (consolidate without prompt)")
+    review.add_argument("--auto-reject", action="store_true", help="auto-reject all (mark as rejected)")
+    review.add_argument("--id", help="review a single candidate by id")
+
+    models = subparsers.add_parser("models", help="manage local LLM models (Gemma)")
+    models_sub = models.add_subparsers(dest="models_cmd", required=True)
+    pull = models_sub.add_parser("pull", help="download a model")
+    pull.add_argument("name", choices=["gemma-2b"], help="model identifier")
+    pull.add_argument("--force", action="store_true", help="re-download even if file exists")
+    models_sub.add_parser("list", help="list installed models with paths")
+
+    eval_cmd = subparsers.add_parser(
+        "eval",
+        help="run an eval suite against memoirs retrieval (P0-3)",
+    )
+    eval_cmd.add_argument(
+        "--suite", default="synthetic_basic",
+        help=(
+            "either 'synthetic_basic' (built-in 30-memory suite, runs on a "
+            "fresh temp DB) or a path to a LongMemEval-format JSONL file "
+            "(runs against the configured --db)"
+        ),
+    )
+    eval_cmd.add_argument("--top-k", type=int, default=10)
+    eval_cmd.add_argument(
+        "--modes", default="hybrid,dense,bm25",
+        help="comma-separated retrieval modes (default: hybrid,dense,bm25)",
+    )
+    eval_cmd.add_argument(
+        "--save", default=None, metavar="PATH",
+        help="write the JSON results to this path (round-trips with EvalResults.from_json)",
+    )
+    eval_cmd.add_argument(
+        "--limit", type=int, default=None,
+        help="(longmemeval only) cap the number of cases for quick smoke runs",
+    )
+    eval_cmd.add_argument(
+        "--use-assemble-context", action="store_true",
+        help="run the full assemble_context pipeline instead of bare _retrieve_candidates",
+    )
+
+    tool_calls = subparsers.add_parser(
+        "tool-calls",
+        help="inspect tool_call memorias (P1-8)",
+    )
+    tc_sub = tool_calls.add_subparsers(dest="tool_calls_cmd", required=True)
+    tc_list = tc_sub.add_parser("list", help="list recent tool_call memorias as a table")
+    tc_list.add_argument("--name", default=None, help="filter by tool name")
+    tc_list.add_argument(
+        "--status", default=None, choices=["success", "error", "cancelled"],
+        help="filter by tool_status",
+    )
+    tc_list.add_argument("--limit", type=int, default=20, help="max rows (default 20)")
+    tc_list.add_argument("--json", action="store_true", help="emit JSON instead of a table")
+    tc_stats = tc_sub.add_parser(
+        "stats", help="aggregate tool_call memorias by tool: count, success_rate, avg_importance",
+    )
+    tc_stats.add_argument("--name", default=None, help="restrict stats to a single tool")
+    tc_stats.add_argument("--limit", type=int, default=50, help="max distinct tools (default 50)")
+    tc_stats.add_argument("--json", action="store_true", help="emit JSON instead of a table")
+
+    events_cmd = subparsers.add_parser(
+        "events", help="inspect / drain the durable event_queue (P0-4)",
+    )
+    events_sub = events_cmd.add_subparsers(dest="events_cmd", required=True)
+    ev_list = events_sub.add_parser("list", help="list recent queue rows newest-first")
+    ev_list.add_argument(
+        "--status", default=None,
+        choices=["pending", "processing", "done", "failed"],
+        help="filter by status",
+    )
+    ev_list.add_argument("--limit", type=int, default=50, help="max rows (default 50)")
+    ev_list.add_argument("--json", action="store_true", help="emit JSON instead of a table")
+    events_sub.add_parser("stats", help="counts by status + age of oldest pending")
+    ev_proc = events_sub.add_parser(
+        "process", help="drain pending events through the registered handler table",
+    )
+    ev_proc.add_argument("--batch-size", type=int, default=50)
+    ev_req = events_sub.add_parser(
+        "requeue-failed",
+        help="reset failed rows older than --max-age-hours back to pending",
+    )
+    ev_req.add_argument("--max-age-hours", type=int, default=24)
+
+    conflicts = subparsers.add_parser(
+        "conflicts",
+        help="triage detected memoria contradictions (P5-2)",
+    )
+    conflicts_sub = conflicts.add_subparsers(dest="conflicts_cmd", required=True)
+    c_list = conflicts_sub.add_parser("list", help="list conflicts (default: pending)")
+    c_list.add_argument(
+        "--status", default="pending",
+        help="status filter: pending | resolved | dismissed | all (default: pending)",
+    )
+    c_list.add_argument("--limit", type=int, default=50)
+    c_list.add_argument("--json", action="store_true")
+    c_show = conflicts_sub.add_parser("show", help="show a single conflict by id")
+    c_show.add_argument("conflict_id", type=int)
+    c_show.add_argument("--json", action="store_true")
+    c_resolve = conflicts_sub.add_parser("resolve", help="apply a resolution action")
+    c_resolve.add_argument("conflict_id", type=int)
+    c_resolve.add_argument(
+        "--action", required=True,
+        choices=["keep_a", "keep_b", "keep_both", "merge", "dismiss"],
+    )
+    c_resolve.add_argument("--notes", default=None)
+    c_resolve.add_argument("--json", action="store_true")
+
+    db_cmd = subparsers.add_parser("db", help="schema migrations + database maintenance")
+    db_sub = db_cmd.add_subparsers(dest="db_cmd", required=True)
+    db_sub.add_parser(
+        "rebuild-fts",
+        help="rebuild the FTS5 index over memories.content (P2-1 hybrid retrieval)",
+    )
+    db_sub.add_parser("version", help="print current and target schema version")
+    db_migrate = db_sub.add_parser("migrate", help="apply pending migrations (idempotent)")
+    db_migrate.add_argument("--to", type=int, default=None, metavar="N",
+                            help="apply or rollback to exact version N")
+    db_migrate.add_argument("--rollback", action="store_true",
+                            help="undo the most recently applied migration")
+    db_migrate.add_argument("--steps", type=int, default=1,
+                            help="number of migrations to roll back (with --rollback, default 1)")
+    db_rb = db_sub.add_parser("rollback", help="undo the most recently applied migration")
+    db_rb.add_argument("--steps", type=int, default=1,
+                       help="number of migrations to roll back (default 1)")
+    db_sub.add_parser("list", help="list available migrations and which are applied")
+
+    # P3-2 encryption-at-rest subcommands. All require sqlcipher3 (extras
+    # `encryption`); they short-circuit with a friendly error otherwise.
+    db_encrypt = db_sub.add_parser(
+        "encrypt",
+        help="convert a plain DB to a SQLCipher-encrypted DB (P3-2)",
+    )
+    db_encrypt.add_argument("--key", required=True, help="passphrase or 64-hex raw key")
+    db_encrypt.add_argument(
+        "--from-db", default=None,
+        help="source plain DB (default: --db)",
+    )
+    db_encrypt.add_argument(
+        "--out", default=None,
+        help="destination encrypted DB (default: <from-db>.enc)",
+    )
+    db_decrypt = db_sub.add_parser(
+        "decrypt",
+        help="convert a SQLCipher-encrypted DB back to plaintext (P3-2)",
+    )
+    db_decrypt.add_argument("--key", required=True, help="passphrase or 64-hex raw key")
+    db_decrypt.add_argument(
+        "--out", default=None,
+        help="destination plain DB (default: <db>.plain)",
+    )
+    db_rekey = db_sub.add_parser(
+        "rekey",
+        help="re-encrypt an encrypted DB with a new passphrase (P3-2)",
+    )
+    db_rekey.add_argument("--old", required=True, help="current passphrase")
+    db_rekey.add_argument("--new", required=True, help="new passphrase")
+
+    # P3-6: GDPR export + portable import.
+    export_cmd = subparsers.add_parser(
+        "export",
+        help="GDPR-friendly portable export of the corpus to a zip bundle (P3-6)",
+    )
+    export_sub = export_cmd.add_subparsers(dest="export_cmd")
+    export_cmd.add_argument("--user-id", default=None,
+                            help="filter by user_id (only effective if the schema has the column)")
+    export_cmd.add_argument("--out", default=None,
+                            help="output bundle path (default ./memoirs-export-<ts>.zip)")
+    export_cmd.add_argument("--include-embeddings", dest="include_embeddings",
+                            action="store_true", default=True)
+    export_cmd.add_argument("--no-embeddings", dest="include_embeddings",
+                            action="store_false",
+                            help="omit embeddings.npz from the bundle")
+    export_cmd.add_argument("--redact-pii", action="store_true",
+                            help="run memoirs.core.redact over text fields before serializing")
+    export_cmd.add_argument("--format", choices=["zip", "targz"], default="zip",
+                            help="archive format (zip or targz). targz wraps the same payload tree.")
+    export_verify = export_sub.add_parser(
+        "verify", help="hash-check a bundle without importing it",
+    )
+    export_verify.add_argument("bundle", help="path to the bundle to verify")
+
+    import_cmd = subparsers.add_parser(
+        "import", help="re-hydrate a memoirs DB from a previously emitted bundle (P3-6)",
+    )
+    import_cmd.add_argument("bundle", help="path to the bundle (.zip)")
+    import_cmd.add_argument("--mode", choices=["merge", "replace", "new_user"],
+                            default="merge")
+    import_cmd.add_argument("--new-user-id", default=None,
+                            help="target user_id when --mode=new_user")
+    import_cmd.add_argument("--no-verify", dest="verify", action="store_false",
+                            default=True,
+                            help="skip the manifest hash verification before importing")
+
+    # ----- Fase 5A: scope / share / unshare -------------------------------
+    scope_cmd = subparsers.add_parser(
+        "scope",
+        help="manage the effective Scope (user_id / agent_id / namespace) for "
+             "this install (Fase 5A — ACL wiring)",
+    )
+    scope_sub = scope_cmd.add_subparsers(dest="scope_cmd", required=True)
+    s_set = scope_sub.add_parser("set", help="persist a default Scope to ~/.memoirs/scope.json")
+    s_set.add_argument("--user-id", required=True, help="user identity to scope all reads/writes to")
+    s_set.add_argument("--agent-id", default=None)
+    s_set.add_argument("--namespace", default=None)
+    s_set.add_argument("--visibility", default="private",
+                       choices=["private", "shared", "org", "public"])
+    scope_sub.add_parser("show", help="print the effective Scope (env > config > default)")
+    scope_sub.add_parser("clear", help="remove ~/.memoirs/scope.json (revert to defaults)")
+
+    share_cmd = subparsers.add_parser(
+        "share",
+        help="grant another user_id read-access to a memory (Fase 5A)",
+    )
+    share_cmd.add_argument("memory_id", help="memory id (full or unique prefix)")
+    share_cmd.add_argument("--user", required=True, dest="target_user",
+                           help="user_id to grant read access to")
+
+    unshare_cmd = subparsers.add_parser(
+        "unshare",
+        help="revoke a previously-granted share (Fase 5A)",
+    )
+    unshare_cmd.add_argument("memory_id", help="memory id (full or unique prefix)")
+    unshare_cmd.add_argument("--user", required=True, dest="target_user",
+                             help="user_id whose share should be revoked")
+
+    commands_cmd = subparsers.add_parser(
+        "commands",
+        help="inspect captured tool_call memorias with project/cwd context",
+    )
+    commands_sub = commands_cmd.add_subparsers(dest="commands_cmd", required=True)
+
+    cmd_list = commands_sub.add_parser("list", help="list recent captured commands")
+    cmd_list.add_argument("--project", default=None,
+                          help="filter by metadata.project_name")
+    cmd_list.add_argument("--tool", default=None,
+                          help="filter by tool_name (case-insensitive)")
+    cmd_list.add_argument("--status", default=None,
+                          choices=["success", "error", "cancelled"],
+                          help="filter by tool_status")
+    cmd_list.add_argument("--limit", type=int, default=50,
+                          help="max rows (default 50)")
+    cmd_list.add_argument("--days", type=int, default=None,
+                          help="restrict to the last N days")
+    cmd_list.add_argument("--json", action="store_true",
+                          help="emit JSON instead of a table")
+
+    cmd_show = commands_sub.add_parser("show", help="print a single command memory")
+    cmd_show.add_argument("memory_id", help="memory id (full or unique prefix)")
+    cmd_show.add_argument("--json", action="store_true")
+
+    cmd_stats = commands_sub.add_parser(
+        "stats", help="aggregate captured commands by tool_name",
+    )
+    cmd_stats.add_argument("--project", default=None,
+                           help="filter by metadata.project_name")
+    cmd_stats.add_argument("--json", action="store_true")
+
+    cmd_replay = commands_sub.add_parser(
+        "replay", help="reconstruct the exact command for copy-paste",
+    )
+    cmd_replay.add_argument("memory_id", help="memory id (full or unique prefix)")
+
+    # Point-in-time snapshots (atomic VACUUM INTO copies of the live DB).
+    snap_cmd = subparsers.add_parser(
+        "snapshot",
+        help="point-in-time snapshots: create / list / diff / restore",
+    )
+    snap_sub = snap_cmd.add_subparsers(dest="snapshot_cmd", required=True)
+    snap_create = snap_sub.add_parser("create", help="atomic snapshot of the live DB")
+    snap_create.add_argument("--name", help="optional human label")
+    snap_sub.add_parser("list", help="list snapshots in newest-first order")
+    snap_diff = snap_sub.add_parser("diff",
+        help="compare two snapshots (or one snapshot vs the live DB)")
+    snap_diff.add_argument("a", help="first snapshot path or 'live'")
+    snap_diff.add_argument("b", help="second snapshot path or 'live'")
+    snap_diff.add_argument("--json", action="store_true")
+    snap_restore = snap_sub.add_parser("restore",
+        help="restore the live DB from a snapshot (auto-creates a safety snapshot first)")
+    snap_restore.add_argument("snapshot_path",
+        help="path to a snapshot file under .memoirs/snapshots/")
+    snap_restore.add_argument("-y", "--yes", action="store_true",
+        help="skip confirmation prompt")
+
+    # Auto-resume thread (P-resume).
+    current_cmd = subparsers.add_parser(
+        "current",
+        help="show resume payload (summary + salient memories) for the latest "
+             "Claude Code conversation matching the current cwd",
+    )
+    current_cmd.add_argument("--json", action="store_true",
+                             help="emit JSON instead of human-readable text")
+    current_cmd.add_argument("--no-ingest", action="store_true",
+                             help="skip auto-ingesting the JSONL when missing")
+
+    resume_cmd = subparsers.add_parser(
+        "resume",
+        help="generate + persist a thread summary for an explicit conversation_id",
+    )
+    resume_cmd.add_argument("conversation_id",
+                            help="conversation id (full or unique prefix accepted)")
+    resume_cmd.add_argument("--json", action="store_true",
+                            help="emit JSON instead of human-readable text")
+    resume_cmd.add_argument("--no-generate", action="store_true",
+                            help="don't generate a summary if none exists yet")
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    if args.command == "mcp":
+        _configure_logging(args.db)
+        return mcp_main(args.db)
+    if args.command == "serve":
+        _configure_logging(args.db)
+        # Optional process pool: bypasses the PyTorch GIL under concurrent
+        # embed load (GAP fix #4). Configure BEFORE the API boots so the
+        # first request doesn't race the lazy pool spin-up.
+        embed_pool_n = int(getattr(args, "embed_pool", 0) or 0)
+        if embed_pool_n > 0:
+            os.environ["MEMOIRS_EMBED_BACKEND"] = "process_pool"
+            os.environ["MEMOIRS_EMBED_POOL_WORKERS"] = str(embed_pool_n)
+            from .engine import embed_pool as _ep
+            _ep.configure_pool(n_workers=embed_pool_n)
+        from .api.server import run as run_api
+        run_api(db_path=args.db, host=args.host, port=args.port)
+        return 0
+    if args.command == "ui":
+        _configure_logging(args.db)
+        return _cmd_ui(args)
+    if args.command == "logs":
+        return _cmd_logs(args.db, args.tail, args.follow, getattr(args, "format", None))
+    if args.command == "trace-id":
+        from .observability import get_trace_id
+        tid = get_trace_id()
+        print(tid if tid else "")
+        return 0
+    if args.command == "db":
+        # The `db` subcommand drives migrations explicitly — do not auto-run
+        # them on open, otherwise `db version` would always report the
+        # current target value before the user had a chance to inspect it.
+        return _cmd_db(args)
+    if args.command == "eval":
+        # `eval` may need its own scratch DB (synthetic suites seed gold IDs
+        # we don't want polluting the user's corpus). Dispatch before the
+        # global `db = MemoirsDB(args.db)` open below.
+        return _cmd_eval(args)
+    if args.command == "sleep":
+        # `sleep` manages its own DB lifecycle (the scheduler opens a fresh
+        # connection per cycle / loop). Dispatch before the global open so
+        # background loops don't fight with an already-held handle.
+        _configure_logging(args.db)
+        return _cmd_sleep(args)
+    if args.command in {"watch", "ingest"}:
+        _configure_logging(args.db)
+    db = MemoirsDB(args.db)
+    db.init()
+    reporter = _make_reporter() if args.command in {"watch", "ingest"} else print
+    try:
+        if args.command == "init":
+            print(f"initialized {Path(args.db).resolve()}")
+            return 0
+        if args.command == "ingest":
+            target = Path(args.path)
+            kind = getattr(args, "kind", "auto")
+            if kind == "claude-export":
+                from .ingesters.claude_export import import_claude_export
+                stats = import_claude_export(target, db)
+                reporter(
+                    f"claude-export ingested: {stats.conversations} conversations, "
+                    f"{stats.messages} messages "
+                    f"(skipped {stats.skipped_conversations} convs / "
+                    f"{stats.skipped_messages} msgs)"
+                )
+                return 0
+            if target.is_dir():
+                scan_once(db, target, reporter=reporter)
+            else:
+                ingest_path(db, target, reporter=reporter)
+            return 0
+        if args.command == "watch":
+            watch_path(
+                db,
+                Path(args.path),
+                interval=args.interval,
+                once=args.once,
+                realtime=args.realtime,
+                reporter=reporter,
+            )
+            return 0
+        if args.command == "status":
+            print(json.dumps(db.status(), indent=2, ensure_ascii=False))
+            return 0
+        if args.command == "doctor":
+            return _cmd_doctor(db, args.db)
+        if args.command == "setup":
+            return _cmd_setup(db, args.db, yes=args.yes, skip_gemma=args.skip_gemma, skip_mcp=args.skip_mcp)
+        if args.command == "daemon":
+            return _cmd_daemon(args)
+        if args.command == "conversations":
+            rows = [dict(row) for row in db.list_conversations()]
+            if args.json:
+                print(json.dumps(rows, indent=2, ensure_ascii=False))
+            else:
+                for row in rows:
+                    print(f"{row['id']}  {row['message_count']:>4}  {row['source_kind']:<9}  {row['title']}")
+            return 0
+        if args.command == "messages":
+            rows = [dict(row) for row in db.list_messages(args.conversation_id, args.limit)]
+            if args.json:
+                print(json.dumps(rows, indent=2, ensure_ascii=False))
+            else:
+                for row in rows:
+                    content = " ".join(row["content"].split())
+                    if len(content) > 110:
+                        content = content[:107] + "..."
+                    print(f"{row['conversation_id']} #{row['ordinal']:03d} {row['role']:<10} {content}")
+            return 0
+        if args.command == "extract":
+            if args.daemon:
+                _configure_logging(args.db)
+                return _cmd_extract_daemon(
+                    db,
+                    poll_interval=args.poll_interval,
+                    auto_consolidate=args.auto_consolidate,
+                    reprocess_with_gemma=args.reprocess_with_gemma,
+                    max_load=args.max_load,
+                    min_free_mem_mb=args.min_free_mem_mb,
+                )
+            from .engine.curator import extract_pending
+            result = extract_pending(db, limit=args.limit, reprocess_with_gemma=args.reprocess_with_gemma)
+            # P1-8 follow-up: also lift Anthropic-style tool_use / tool_result
+            # blocks out of the raw corpus into ``type='tool_call'`` memorias.
+            # Opt-out via ``MEMOIRS_EXTRACT_TOOL_CALLS=off``; idempotent so a
+            # repeat ``memoirs extract`` does not duplicate rows.
+            from .engine.tool_call_extract import (
+                record_tool_calls_for_conversation,
+                _is_extraction_enabled,
+            )
+            tool_calls_extracted = 0
+            tool_call_convs = 0
+            if _is_extraction_enabled():
+                # Walk the same recent-conversation window ``extract_pending``
+                # touches (bounded by ``--limit``). We re-select rather than
+                # threading IDs out of ``extract_pending`` so this hook stays
+                # additive — no upstream signature changes required.
+                conv_rows = db.conn.execute(
+                    """
+                    SELECT id FROM conversations
+                    WHERE message_count >= 1
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                    """,
+                    (args.limit,),
+                ).fetchall()
+                for row in conv_rows:
+                    n = record_tool_calls_for_conversation(db, row["id"])
+                    if n:
+                        tool_calls_extracted += n
+                        tool_call_convs += 1
+            result["tool_calls_extracted"] = tool_calls_extracted
+            result["tool_call_conversations"] = tool_call_convs
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 0
+        if args.command == "consolidate":
+            from .engine.memory_engine import consolidate_pending
+            # Translate the user-facing --curator flag into the env var the
+            # decision function reads. Restore the previous value on exit so
+            # this never leaks into a long-lived shell.
+            prev_curator_new = os.environ.get("MEMOIRS_CURATOR_ENABLED")
+            prev_curator_legacy = os.environ.get("MEMOIRS_GEMMA_CURATOR")
+            try:
+                if args.curator is not None:
+                    mapped = {"gemma": "on", "heuristic": "off", "auto": "auto"}[args.curator]
+                    os.environ["MEMOIRS_CURATOR_ENABLED"] = mapped
+                    # Mirror to the legacy var too in case downstream code
+                    # still reads it.
+                    os.environ["MEMOIRS_GEMMA_CURATOR"] = mapped
+                result = consolidate_pending(db, limit=args.limit)
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                return 0
+            finally:
+                if args.curator is not None:
+                    if prev_curator_new is None:
+                        os.environ.pop("MEMOIRS_CURATOR_ENABLED", None)
+                    else:
+                        os.environ["MEMOIRS_CURATOR_ENABLED"] = prev_curator_new
+                    if prev_curator_legacy is None:
+                        os.environ.pop("MEMOIRS_GEMMA_CURATOR", None)
+                    else:
+                        os.environ["MEMOIRS_GEMMA_CURATOR"] = prev_curator_legacy
+        if args.command == "maintenance":
+            from .engine.memory_engine import run_daily_maintenance
+            result = run_daily_maintenance(db)
+            if getattr(args, "enrich_decisions", False):
+                from .engine.lifecycle_decisions import sweep_archive_predicate
+                result["enrich_decisions"] = sweep_archive_predicate(db)
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 0
+        if args.command == "cleanup":
+            from .engine.lifecycle import auto_merge_near_duplicates
+            result = auto_merge_near_duplicates(
+                db, threshold=args.threshold, dry_run=args.dry_run, limit=args.limit,
+            )
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 0
+        if args.command == "audit":
+            from .engine.audit import audit_corpus
+            _configure_logging(args.db)
+            result = audit_corpus(
+                db, limit=args.limit, batch_size=args.batch_size,
+                apply=args.apply, type_filter=args.type,
+            )
+            # Print summary; verdicts are in log
+            summary = {k: v for k, v in result.items() if k != "verdicts"}
+            print(json.dumps(summary, indent=2, ensure_ascii=False))
+            return 0
+        if args.command == "ask":
+            from .engine.memory_engine import assemble_context
+            result = assemble_context(db, args.query, top_k=args.top_k, max_lines=args.max_lines, as_of=args.as_of)
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 0
+        if args.command == "why":
+            return _cmd_why(db, args)
+        if args.command == "index-entities":
+            from .engine.graph import index_memory_entities
+            # Honour --use-llm / --no-llm by toggling the env var the graph
+            # module reads. We restore the prior value on exit so subsequent
+            # CLI invocations in the same process aren't affected.
+            _prev_env = os.environ.get("MEMOIRS_GRAPH_LLM")
+            try:
+                if getattr(args, "use_llm", None) is True:
+                    os.environ["MEMOIRS_GRAPH_LLM"] = "on"
+                elif getattr(args, "use_llm", None) is False:
+                    os.environ["MEMOIRS_GRAPH_LLM"] = "off"
+                result = index_memory_entities(db)
+            finally:
+                if _prev_env is None:
+                    os.environ.pop("MEMOIRS_GRAPH_LLM", None)
+                else:
+                    os.environ["MEMOIRS_GRAPH_LLM"] = _prev_env
+            # Surface relation-type breakdown when present (LLM path).
+            rel = result.get("relationships") or {}
+            if isinstance(rel, dict) and rel.get("by_relation"):
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+                print("Relations by predicate:")
+                for pred, n in sorted(rel["by_relation"].items(), key=lambda x: -x[1]):
+                    print(f"  {pred:24s} {n}")
+            else:
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 0
+        if args.command == "projects-refresh":
+            from .engine.graph import refresh_projects_from_conversations
+            print(json.dumps(refresh_projects_from_conversations(db), indent=2, ensure_ascii=False))
+            return 0
+        if args.command == "trace":
+            return _cmd_trace(db, args.conversation_id, args.json)
+        if args.command == "review":
+            return _cmd_review(db, args)
+        if args.command == "graph":
+            return _cmd_graph(db, args)
+        if args.command == "models":
+            return _cmd_models(args)
+        if args.command == "links":
+            return _cmd_links(db, args)
+        if args.command == "raptor":
+            return _cmd_raptor(db, args)
+        if args.command == "tool-calls":
+            return _cmd_tool_calls(db, args)
+        if args.command == "events":
+            return _cmd_events(db, args)
+        if args.command == "conflicts":
+            return _cmd_conflicts(db, args)
+        if args.command == "export":
+            return _cmd_export(db, args)
+        if args.command == "import":
+            return _cmd_import(db, args)
+        if args.command == "scope":
+            return _cmd_scope(args)
+        if args.command == "share":
+            return _cmd_share(db, args)
+        if args.command == "unshare":
+            return _cmd_unshare(db, args)
+        if args.command == "current":
+            return _cmd_current(db, args)
+        if args.command == "resume":
+            return _cmd_resume(db, args)
+        if args.command == "commands":
+            return _cmd_commands(db, args)
+        if args.command == "snapshot":
+            return _cmd_snapshot(db, args)
+    finally:
+        db.close()
+    return 1
+
+
+def _cmd_export(db: MemoirsDB, args) -> int:
+    """``memoirs export [verify]`` — emit or verify a GDPR-portable bundle."""
+    from .export import export_user_data, verify_bundle
+
+    sub = getattr(args, "export_cmd", None)
+    if sub == "verify":
+        verdict = verify_bundle(Path(args.bundle))
+        print(json.dumps(verdict, indent=2, ensure_ascii=False))
+        return 0 if verdict.get("ok") else 1
+
+    out = args.out
+    if not out:
+        ts = __import__("datetime").datetime.now().strftime("%Y%m%dT%H%M%S")
+        out = f"memoirs-export-{ts}.zip"
+    out_path = Path(out)
+    fmt = getattr(args, "format", "zip")
+    if fmt == "targz":
+        # Build a zip in a temp file then re-archive it as a tar.gz so the
+        # internal tree is identical regardless of wrapper format.
+        import tempfile, tarfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_zip = Path(tmp) / "bundle.zip"
+            manifest = export_user_data(
+                db, user_id=args.user_id, out_path=tmp_zip,
+                include_embeddings=args.include_embeddings,
+                redact_pii=args.redact_pii,
+            )
+            # Re-pack: extract zip into tmp/payload/, tar it.
+            payload = Path(tmp) / "payload"
+            payload.mkdir()
+            import zipfile as _zf
+            with _zf.ZipFile(tmp_zip, "r") as zf:
+                zf.extractall(payload)
+            with tarfile.open(out_path, "w:gz") as tf:
+                tf.add(payload, arcname=".")
+    else:
+        manifest = export_user_data(
+            db, user_id=args.user_id, out_path=out_path,
+            include_embeddings=args.include_embeddings,
+            redact_pii=args.redact_pii,
+        )
+
+    print(json.dumps({
+        "ok": True,
+        "bundle": str(out_path.resolve()),
+        "counts": manifest.counts,
+        "schema_version": manifest.schema_version,
+    }, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _cmd_import(db: MemoirsDB, args) -> int:
+    """``memoirs import <bundle>`` — re-hydrate the DB from a bundle."""
+    from .export import import_user_data
+
+    report = import_user_data(
+        db,
+        in_path=Path(args.bundle),
+        mode=args.mode,
+        new_user_id=getattr(args, "new_user_id", None),
+        verify=getattr(args, "verify", True),
+    )
+    print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Fase 5A: scope / share / unshare CLI surface
+# ---------------------------------------------------------------------------
+
+_SCOPE_CONFIG_PATH = Path.home() / ".memoirs" / "scope.json"
+
+
+def _load_scope_config() -> dict:
+    """Read ``~/.memoirs/scope.json`` and return its dict (empty when absent
+    or malformed). Never raises so ``scope show`` works on a fresh install."""
+    if not _SCOPE_CONFIG_PATH.exists():
+        return {}
+    try:
+        return json.loads(_SCOPE_CONFIG_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _effective_scope_dict() -> dict:
+    """Resolve env > config > default, returning a plain dict (sorted keys)
+    so ``scope show`` is reproducible.
+    """
+    cfg = _load_scope_config()
+    eff = {
+        "user_id": (
+            os.environ.get("MEMOIRS_USER_ID")
+            or cfg.get("user_id")
+            or "local"
+        ),
+        "agent_id": os.environ.get("MEMOIRS_AGENT_ID") or cfg.get("agent_id"),
+        "run_id": os.environ.get("MEMOIRS_RUN_ID") or cfg.get("run_id"),
+        "namespace": (
+            os.environ.get("MEMOIRS_NAMESPACE") or cfg.get("namespace")
+        ),
+        "visibility": (
+            os.environ.get("MEMOIRS_VISIBILITY")
+            or cfg.get("visibility")
+            or "private"
+        ),
+    }
+    return eff
+
+
+def _cmd_scope(args) -> int:
+    """``memoirs scope <set|show|clear>`` — manage the persisted Scope."""
+    sub = getattr(args, "scope_cmd", None)
+    if sub == "set":
+        cfg = {
+            "user_id": args.user_id,
+            "agent_id": getattr(args, "agent_id", None),
+            "namespace": getattr(args, "namespace", None),
+            "visibility": getattr(args, "visibility", "private"),
+        }
+        _SCOPE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _SCOPE_CONFIG_PATH.write_text(
+            json.dumps(cfg, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        print(json.dumps(
+            {"ok": True, "config": str(_SCOPE_CONFIG_PATH), "scope": cfg},
+            indent=2, ensure_ascii=False,
+        ))
+        return 0
+    if sub == "show":
+        eff = _effective_scope_dict()
+        print(json.dumps(
+            {
+                "scope": eff,
+                "config_path": str(_SCOPE_CONFIG_PATH),
+                "config_exists": _SCOPE_CONFIG_PATH.exists(),
+            },
+            indent=2, ensure_ascii=False,
+        ))
+        return 0
+    if sub == "clear":
+        existed = _SCOPE_CONFIG_PATH.exists()
+        if existed:
+            _SCOPE_CONFIG_PATH.unlink()
+        print(json.dumps({"ok": True, "removed": existed}, indent=2))
+        return 0
+    print(f"unknown scope subcommand: {sub}", file=sys.stderr)
+    return 2
+
+
+def _resolve_memory_id(db: MemoirsDB, prefix: str) -> str | None:
+    """Resolve a memory_id from a (possibly partial) prefix. Returns the full
+    id if exactly one match exists, ``None`` when nothing matches, or raises
+    ``ValueError`` on ambiguous prefixes.
+    """
+    if not prefix:
+        return None
+    rows = db.conn.execute(
+        "SELECT id FROM memories WHERE id = ? OR id LIKE ? LIMIT 2",
+        (prefix, f"{prefix}%"),
+    ).fetchall()
+    if not rows:
+        return None
+    if len(rows) > 1:
+        raise ValueError(f"ambiguous memory id prefix: {prefix!r}")
+    return rows[0]["id"]
+
+
+def _cmd_share(db: MemoirsDB, args) -> int:
+    """``memoirs share <id> --user X`` — wrap ``acl.share_memory``."""
+    from .engine import acl as _acl
+    try:
+        full = _resolve_memory_id(db, args.memory_id)
+    except ValueError as e:
+        print(json.dumps({"ok": False, "error": str(e)}), file=sys.stderr)
+        return 2
+    if full is None:
+        print(json.dumps(
+            {"ok": False, "error": f"memory not found: {args.memory_id!r}"},
+        ), file=sys.stderr)
+        return 1
+    result = _acl.share_memory(db, full, args.target_user)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _cmd_unshare(db: MemoirsDB, args) -> int:
+    """``memoirs unshare <id> --user X`` — wrap ``acl.unshare_memory``."""
+    from .engine import acl as _acl
+    try:
+        full = _resolve_memory_id(db, args.memory_id)
+    except ValueError as e:
+        print(json.dumps({"ok": False, "error": str(e)}), file=sys.stderr)
+        return 2
+    if full is None:
+        print(json.dumps(
+            {"ok": False, "error": f"memory not found: {args.memory_id!r}"},
+        ), file=sys.stderr)
+        return 1
+    result = _acl.unshare_memory(db, full, args.target_user)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _cmd_events(db: MemoirsDB, args) -> int:
+    """``memoirs events <list|stats|process|requeue-failed>`` — operator
+    surface for the durable event_queue (P0-4)."""
+    from .engine import event_queue as eq
+
+    sub = getattr(args, "events_cmd", None)
+    if sub == "list":
+        rows = eq.list_events(db, status=args.status, limit=args.limit)
+        if args.json:
+            print(json.dumps(rows, indent=2, ensure_ascii=False))
+            return 0
+        if not rows:
+            print("(no events)")
+            return 0
+        print(f"{'id':>5}  {'status':<10}  {'event_type':<24}  created_at")
+        for r in rows:
+            print(
+                f"{r['id']:>5}  {str(r['status']):<10}  {str(r['event_type']):<24}  {r['created_at']}"
+            )
+        return 0
+    if sub == "stats":
+        print(json.dumps(eq.get_stats(db), indent=2, ensure_ascii=False))
+        return 0
+    if sub == "process":
+        # No registered handlers at the CLI level — events are drained
+        # (unknown types are marked done by process_pending). Operators who
+        # need a custom dispatch can wire one up via the engine API.
+        result = eq.process_pending(db, batch_size=args.batch_size, handlers={})
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    if sub == "requeue-failed":
+        n = eq.requeue_failed(db, max_age_hours=args.max_age_hours)
+        print(json.dumps({"requeued": n}, indent=2, ensure_ascii=False))
+        return 0
+    print(f"unknown events subcommand: {sub}", file=sys.stderr)
+    return 2
+
+
+def _cmd_ui(args) -> int:
+    """``memoirs ui`` — boot a minimal FastAPI app with only the /ui router.
+
+    Mirrors ``serve`` in spirit but without exposing the full REST surface;
+    handy when you only want to inspect the corpus visually, e.g. during
+    debugging or demos. The DB is auto-migrated as usual on first connect.
+    """
+    try:
+        import uvicorn
+        from fastapi import FastAPI
+    except ImportError as e:
+        print(
+            f"error: {e}. Install the API extra: pip install -e '.[api]'",
+            file=sys.stderr,
+        )
+        return 1
+
+    from .api.ui import mount_ui
+
+    app = FastAPI(
+        title="Memoirs UI",
+        description="Local web inspector — server-rendered HTML + HTMX.",
+    )
+    mount_ui(app, Path(args.db))
+    print(f"memoirs ui — db={Path(args.db).resolve()}")
+    print(f"  http://{args.host}:{args.port}/ui/memories")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    return 0
+
+
+def _cmd_db(args) -> int:
+    """Dispatch ``memoirs db <subcmd>`` (version, migrate, rollback, list,
+    rebuild-fts, encrypt, decrypt, rekey).
+
+    The DB is opened with ``auto_migrate=False`` so the user can inspect the
+    current version before any migration runs. Encryption subcommands
+    (encrypt/decrypt/rekey) drive sqlcipher3 directly without opening
+    ``MemoirsDB`` first — they manipulate the file via ATTACH + sqlcipher_export.
+    """
+    from . import migrations as _migrations
+
+    sub = getattr(args, "db_cmd", None)
+
+    # Encryption subcommands run before any MemoirsDB.__init__ so they can
+    # operate on files that may or may not be plaintext SQLite.
+    if sub in {"encrypt", "decrypt", "rekey"}:
+        return _cmd_db_encryption(args, sub)
+
+    db = MemoirsDB(args.db, auto_migrate=False)
+    try:
+        if sub == "version":
+            current = _migrations.current_version(db.conn)
+            target = _migrations.target_version()
+            print(json.dumps({
+                "db": str(Path(args.db).resolve()),
+                "current": current,
+                "target": target,
+                "pending": max(0, target - current),
+            }, indent=2))
+            return 0
+
+        if sub == "list":
+            current = _migrations.current_version(db.conn)
+            migs = _migrations.discover_migrations()
+            rows = [{
+                "version": m.version,
+                "name": m.name,
+                "applied": m.version <= current,
+            } for m in migs]
+            print(json.dumps({"current": current, "migrations": rows}, indent=2))
+            return 0
+
+        if sub == "rollback":
+            steps = max(1, int(getattr(args, "steps", 1)))
+            rolled = _migrations.rollback(db.conn, steps=steps)
+            print(json.dumps({
+                "rolled_back": [abs(v) for v in rolled],
+                "current": _migrations.current_version(db.conn),
+            }, indent=2))
+            return 0
+
+        if sub == "migrate":
+            if getattr(args, "rollback", False):
+                steps = max(1, int(getattr(args, "steps", 1)))
+                rolled = _migrations.rollback(db.conn, steps=steps)
+                print(json.dumps({
+                    "rolled_back": [abs(v) for v in rolled],
+                    "current": _migrations.current_version(db.conn),
+                }, indent=2))
+                return 0
+            target = getattr(args, "to", None)
+            if target is not None:
+                touched = _migrations.migrate_to(db.conn, int(target))
+            else:
+                touched = _migrations.run_pending_migrations(db.conn)
+            print(json.dumps({
+                "applied": [v for v in touched if v > 0],
+                "rolled_back": [abs(v) for v in touched if v < 0],
+                "current": _migrations.current_version(db.conn),
+            }, indent=2))
+            return 0
+
+        if sub == "rebuild-fts":
+            # Backfill (or refresh) the FTS5 index over memories.content.
+            # Uses ensure_fts_schema first so this works on DBs that were
+            # never migrated to v3 — handy after upgrading from a legacy
+            # build that pre-dates hybrid retrieval.
+            from .engine.hybrid_retrieval import ensure_fts_schema, rebuild_fts_index
+            import time as _time
+            ensure_fts_schema(db.conn)
+            t0 = _time.perf_counter()
+            n = rebuild_fts_index(db.conn)
+            elapsed_ms = (_time.perf_counter() - t0) * 1000.0
+            print(json.dumps({
+                "rebuilt": n,
+                "elapsed_ms": round(elapsed_ms, 1),
+                "db": str(Path(args.db).resolve()),
+            }, indent=2))
+            return 0
+
+        print(f"unknown db subcommand: {sub}", file=sys.stderr)
+        return 2
+    finally:
+        db.close()
+
+
+def _cmd_db_encryption(args, sub: str) -> int:
+    """Implement ``memoirs db {encrypt,decrypt,rekey}`` (P3-2).
+
+    All three operations require sqlcipher3 (the ``encryption`` extra). When
+    it's missing we print a friendly error and exit 1 — never silently fall
+    back to plaintext.
+
+    * ``encrypt``: copies an existing plain DB into a new SQLCipher file
+      using ``ATTACH ... KEY '...'`` + ``sqlcipher_export()``.
+    * ``decrypt``: inverse — reads encrypted DB, exports to a plain attached
+      DB with empty key.
+    * ``rekey``: opens with old key, runs ``PRAGMA rekey = '<new>'``.
+    """
+    from .db import _sqlcipher, _format_key_pragma  # local import keeps top clean
+
+    if _sqlcipher is None:
+        print(
+            "error: sqlcipher3 not installed. Install with: "
+            "pip install 'memoirs[encryption]'",
+            file=sys.stderr,
+        )
+        return 1
+
+    if sub == "encrypt":
+        src = Path(args.from_db) if getattr(args, "from_db", None) else Path(args.db)
+        out = Path(args.out) if getattr(args, "out", None) else src.with_suffix(src.suffix + ".enc")
+        if not src.exists():
+            print(f"error: source DB not found: {src}", file=sys.stderr)
+            return 1
+        if out.exists():
+            print(f"error: destination already exists: {out}", file=sys.stderr)
+            return 1
+        # Open the plain source through sqlcipher3 (it handles plaintext when
+        # no key is set), ATTACH the destination with KEY, copy via export.
+        conn = _sqlcipher.connect(str(src))
+        try:
+            key_lit = _format_key_pragma(args.key)
+            conn.execute(f"ATTACH DATABASE ? AS encrypted KEY {key_lit}", (str(out),))
+            conn.execute("SELECT sqlcipher_export('encrypted')")
+            conn.execute("DETACH DATABASE encrypted")
+        finally:
+            conn.close()
+        print(json.dumps({
+            "encrypted": str(out.resolve()),
+            "from": str(src.resolve()),
+        }, indent=2))
+        return 0
+
+    if sub == "decrypt":
+        src = Path(args.db)
+        out = Path(args.out) if getattr(args, "out", None) else src.with_suffix(src.suffix + ".plain")
+        if not src.exists():
+            print(f"error: source DB not found: {src}", file=sys.stderr)
+            return 1
+        if out.exists():
+            print(f"error: destination already exists: {out}", file=sys.stderr)
+            return 1
+        conn = _sqlcipher.connect(str(src))
+        try:
+            key_lit = _format_key_pragma(args.key)
+            conn.execute(f"PRAGMA key = {key_lit}")
+            # Validate key by reading sqlite_master.
+            conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
+            # ATTACH plaintext destination with empty key.
+            conn.execute("ATTACH DATABASE ? AS plaintext KEY ''", (str(out),))
+            conn.execute("SELECT sqlcipher_export('plaintext')")
+            conn.execute("DETACH DATABASE plaintext")
+        finally:
+            conn.close()
+        print(json.dumps({
+            "decrypted": str(out.resolve()),
+            "from": str(src.resolve()),
+        }, indent=2))
+        return 0
+
+    if sub == "rekey":
+        src = Path(args.db)
+        if not src.exists():
+            print(f"error: DB not found: {src}", file=sys.stderr)
+            return 1
+        conn = _sqlcipher.connect(str(src))
+        try:
+            old_lit = _format_key_pragma(args.old)
+            new_lit = _format_key_pragma(args.new)
+            conn.execute(f"PRAGMA key = {old_lit}")
+            # Validate before rekeying so an incorrect old key fails fast.
+            conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
+            conn.execute(f"PRAGMA rekey = {new_lit}")
+        finally:
+            conn.close()
+        print(json.dumps({"rekeyed": str(src.resolve())}, indent=2))
+        return 0
+
+    print(f"unknown encryption subcommand: {sub}", file=sys.stderr)
+    return 2
+
+
+def _cmd_eval(args) -> int:
+    """Dispatch ``memoirs eval`` (P0-3 eval harness).
+
+    Two flavors:
+      * ``--suite synthetic_basic`` → seed a *fresh* throwaway DB with the
+        bundled 30-memory synthetic corpus, run the suite, print the
+        per-mode table, optionally save JSON. The user's ``--db`` is
+        deliberately ignored here so the eval never pollutes a real
+        memoirs corpus with gold-IDs.
+      * ``--suite <path-to-jsonl>`` → load the JSONL via the LongMemEval
+        adapter, run against the user's configured ``--db``. The DB must
+        already contain the haystack memorias (out-of-scope for this
+        harness — see longmemeval_adapter docstring).
+    """
+    import tempfile
+    from .evals.harness import run_eval
+    from .evals.suites.synthetic_basic import build as build_synthetic_basic
+    from .evals.longmemeval_adapter import load_longmemeval
+
+    modes_str = getattr(args, "modes", "hybrid,dense,bm25")
+    modes = tuple(m.strip() for m in modes_str.split(",") if m.strip())
+    top_k = int(args.top_k)
+    use_assemble = bool(getattr(args, "use_assemble_context", False))
+    save_to = getattr(args, "save", None)
+
+    suite_arg = (args.suite or "synthetic_basic").strip()
+
+    # Synthetic suite: throwaway DB.
+    if suite_arg == "synthetic_basic":
+        with tempfile.TemporaryDirectory(prefix="memoirs-eval-") as tmp:
+            tmp_db_path = Path(tmp) / "eval.sqlite"
+            db = MemoirsDB(tmp_db_path)
+            db.init()
+            try:
+                suite = build_synthetic_basic(db)
+                results = run_eval(
+                    db, suite, top_k=top_k, retrieval_modes=modes,
+                    use_assemble_context=use_assemble,
+                )
+            finally:
+                db.close()
+        results.print_table()
+        if save_to:
+            results.to_json(save_to)
+            print(f"\nresults saved to {Path(save_to).resolve()}")
+        return 0
+
+    # Otherwise treat suite_arg as a JSONL path for LongMemEval.
+    suite, info = load_longmemeval(
+        suite_arg, limit=getattr(args, "limit", None),
+    )
+    if suite is None:
+        print(json.dumps({"skip": True, **info}, indent=2))
+        return 0
+
+    db = MemoirsDB(args.db)
+    db.init()
+    try:
+        results = run_eval(
+            db, suite, top_k=top_k, retrieval_modes=modes,
+            use_assemble_context=use_assemble,
+        )
+    finally:
+        db.close()
+    print(json.dumps({"adapter_info": info}, indent=2))
+    results.print_table()
+    if save_to:
+        results.to_json(save_to)
+        print(f"\nresults saved to {Path(save_to).resolve()}")
+    return 0
+
+
+def _cmd_extract_daemon(
+    db: MemoirsDB,
+    *,
+    poll_interval: int,
+    auto_consolidate: bool,
+    reprocess_with_gemma: bool,
+    max_load: float,
+    min_free_mem_mb: int,
+) -> int:
+    """Run extract continuously with adaptive throttling.
+
+    Polls for new conversations, processes them through the Gemma cascade,
+    then idles for `poll_interval`. Pauses when:
+      - system load1 / cpu_count > `max_load` (default 0.85) — yields to other workloads
+      - free memory < `min_free_mem_mb` MB (default 2048)
+    """
+    import signal
+    from .engine.curator import _have_curator, extract_pending
+    from .engine import extract_spacy
+    from .engine.memory_engine import consolidate_pending
+
+    log = logging.getLogger("memoirs.daemon")
+    stop = {"flag": False}
+
+    def _on_signal(sig, frame):
+        log.info("daemon: signal %d received, finishing current batch then exiting", sig)
+        stop["flag"] = True
+
+    signal.signal(signal.SIGTERM, _on_signal)
+    signal.signal(signal.SIGINT, _on_signal)
+
+    cpu_count = os.cpu_count() or 4
+    log.info(
+        "extract daemon starting (poll=%ds curator=%s spacy=%s auto_consolidate=%s "
+        "max_load=%.2f×%d min_free_mem=%dMB)",
+        poll_interval, _have_curator(), extract_spacy.is_available(),
+        auto_consolidate, max_load, cpu_count, min_free_mem_mb,
+    )
+
+    idle_count = 0
+    while not stop["flag"]:
+        # Auto-throttle: pause when system is busy
+        if not _wait_until_idle(stop, max_load, cpu_count, min_free_mem_mb, log):
+            break  # stop flag tripped while waiting
+
+        try:
+            result = extract_pending(db, limit=10, reprocess_with_gemma=reprocess_with_gemma)
+        except Exception:
+            log.exception("daemon: extract failed, sleeping")
+            _sleep_interruptible(poll_interval, stop)
+            continue
+
+        if result["candidates"] > 0:
+            log.info(
+                "daemon: extracted %d candidates from %d conversations (gemma=%s)",
+                result["candidates"], result["conversations"], result.get("gemma_available"),
+            )
+            if auto_consolidate:
+                try:
+                    cons = consolidate_pending(db, limit=200)
+                    log.info("daemon: consolidated %d by_action=%s", cons["processed"], cons["by_action"])
+                except Exception:
+                    log.exception("daemon: consolidate failed")
+            idle_count = 0
+            continue  # immediately try the next batch — there may be more queued
+
+        idle_count += 1
+        if idle_count == 1 or idle_count % 10 == 0:
+            log.info("daemon: idle, no pending conversations (poll #%d)", idle_count)
+        _sleep_interruptible(poll_interval, stop)
+
+    log.info("daemon: stopped cleanly")
+    return 0
+
+
+def _cmd_sleep(args) -> int:
+    """Dispatch ``memoirs sleep <subcmd>`` (run-once / status / history / loop).
+
+    The scheduler manages its own SQLite handle so this helper never opens
+    one — keeps the foreground / background process boundary clean.
+    """
+    from .engine.sleep_consolidation import (
+        SleepScheduler,
+        run_once_cli,
+        status_cli,
+        history_cli,
+    )
+
+    sub = getattr(args, "sleep_cmd", None)
+    if sub == "run-once":
+        jobs_str = getattr(args, "jobs", None)
+        jobs = (
+            tuple(j.strip() for j in jobs_str.split(",") if j.strip())
+            if jobs_str else None
+        )
+        force = not getattr(args, "respect_preconditions", False)
+        report = run_once_cli(args.db, jobs=jobs, force=force)
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return 0
+
+    if sub == "status":
+        info = status_cli(args.db)
+        print(json.dumps(info, indent=2, ensure_ascii=False))
+        return 0
+
+    if sub == "history":
+        runs = history_cli(args.db, limit=int(getattr(args, "limit", 10)))
+        if getattr(args, "json", False):
+            print(json.dumps(runs, indent=2, ensure_ascii=False))
+            return 0
+        if not runs:
+            print("(no sleep runs yet)")
+            return 0
+        # Table view: id, started, finished, duration, status, jobs summary.
+        print(f"{'id':>4}  {'started_at':<32}  {'jobs':<40}  status")
+        print("-" * 96)
+        for r in runs:
+            jobs = r.get("jobs") or []
+            summary = ", ".join(
+                f"{j.get('name')}={j.get('status', '?')}" for j in jobs
+            ) or "(skipped)"
+            err = r.get("error")
+            status = "error" if err else ("skipped" if not jobs else "ok")
+            print(f"{r['id']:>4}  {r['started_at']:<32}  {summary[:40]:<40}  {status}")
+        return 0
+
+    if sub == "loop":
+        # Foreground loop — used by `memoirs daemon start` to spawn this
+        # process; signal handling lives here so SIGTERM exits cleanly.
+        import signal
+
+        sched = SleepScheduler(args.db)
+
+        def _on_signal(sig, frame):
+            logging.getLogger("memoirs.sleep").info(
+                "sleep loop: signal %d received, stopping", sig,
+            )
+            sched.stop_loop(timeout=2.0)
+            sys.exit(0)
+
+        signal.signal(signal.SIGTERM, _on_signal)
+        signal.signal(signal.SIGINT, _on_signal)
+        sched.start_loop()
+        # Block until the worker thread exits (driven by SIGTERM/SIGINT).
+        if sched._thread is not None:
+            sched._thread.join()
+        return 0
+
+    print(f"unknown sleep subcommand: {sub}", file=sys.stderr)
+    return 2
+
+
+def _system_load_ratio() -> float:
+    try:
+        return os.getloadavg()[0] / max(1, os.cpu_count() or 1)
+    except (OSError, AttributeError):
+        return 0.0
+
+
+def _free_memory_mb() -> int:
+    """Return free memory MB (Linux /proc/meminfo). Returns large number on other OSes."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) // 1024
+    except OSError:
+        pass
+    return 999_999  # unknown → assume plenty
+
+
+def _wait_until_idle(stop: dict, max_load: float, cpu_count: int, min_free_mem_mb: int, log) -> bool:
+    """Sleep until system load and memory are healthy. Returns False if stop tripped.
+
+    Logs the start (THROTTLE START with reason) and end (THROTTLE END with new
+    metrics) of any pause, so the user can see in the log when the daemon yields
+    and when it resumes — including approximate wait time.
+    """
+    backoff = 30
+    started_throttle_at: float | None = None
+    initial_load = initial_free = None
+    import time as _time
+    while not stop["flag"]:
+        load_ratio = _system_load_ratio()
+        free_mb = _free_memory_mb()
+        if load_ratio <= max_load and free_mb >= min_free_mem_mb:
+            if started_throttle_at is not None:
+                waited = _time.time() - started_throttle_at
+                log.info(
+                    "daemon: THROTTLE END after %.0fs (load %.2f→%.2f, free_mem %dMB→%dMB) — resuming",
+                    waited, initial_load, load_ratio, initial_free, free_mb,
+                )
+            return True
+        if started_throttle_at is None:
+            started_throttle_at = _time.time()
+            initial_load = load_ratio
+            initial_free = free_mb
+            reason = []
+            if load_ratio > max_load:
+                reason.append(f"load={load_ratio:.2f}>{max_load:.2f} ({load_ratio*cpu_count:.0f}/{cpu_count} cores)")
+            if free_mb < min_free_mem_mb:
+                reason.append(f"free_mem={free_mb}MB<{min_free_mem_mb}MB")
+            log.info("daemon: THROTTLE START — %s, sleeping %ds", "; ".join(reason), backoff)
+        else:
+            log.info(
+                "daemon: still throttled (load=%.2f, free=%dMB), sleeping %ds",
+                load_ratio, free_mb, backoff,
+            )
+        _sleep_interruptible(backoff, stop)
+        backoff = min(backoff * 2, 300)  # cap at 5min between checks
+    return False
+
+
+def _sleep_interruptible(seconds: int, stop: dict) -> None:
+    """Sleep `seconds`, checking the stop flag every 1s for fast SIGTERM response."""
+    import time as _time
+    for _ in range(int(seconds)):
+        if stop["flag"]:
+            return
+        _time.sleep(1)
+
+
+def _cmd_graph(db: MemoirsDB, args) -> int:
+    from .engine import visualize
+
+    if args.graph_cmd == "list":
+        from .engine.visualize import DEFAULT_OUT_DIR
+        if not DEFAULT_OUT_DIR.exists():
+            print(f"no graphs in {DEFAULT_OUT_DIR.resolve()}")
+            return 0
+        for f in sorted(DEFAULT_OUT_DIR.glob("*.html")):
+            size_kb = f.stat().st_size // 1024
+            print(f"  {size_kb:>5} KB  {f}")
+        return 0
+
+    watch_seconds = getattr(args, "watch", 0) or 0
+
+    def _render_once() -> Path:
+        if args.graph_cmd == "entities":
+            mem_types = ("preference", "decision", "task", "project", "style")
+            if args.include_facts:
+                mem_types = mem_types + ("fact",)
+            return visualize.render_entity_graph(
+                db,
+                output_path=Path(args.out) if args.out else visualize.DEFAULT_OUT_DIR / "entities.html",
+                project=args.project,
+                max_entities=args.limit,
+                include_memories=not args.no_memories,
+                max_memories_per_entity=args.max_mem_per_entity,
+                memory_types=mem_types,
+                auto_refresh_seconds=watch_seconds,
+            )
+        if args.graph_cmd == "decisions":
+            return visualize.render_decision_flow(
+                db, args.conversation_id,
+                output_path=Path(args.out) if args.out else None,
+                auto_refresh_seconds=watch_seconds,
+            )
+        if args.graph_cmd == "memory":
+            return visualize.render_memory_neighborhood(
+                db, args.memory_id,
+                output_path=Path(args.out) if args.out else None, depth=args.depth,
+                auto_refresh_seconds=watch_seconds,
+            )
+        raise ValueError(f"unknown graph subcommand: {args.graph_cmd}")
+
+    try:
+        out = _render_once()
+    except (ValueError, RuntimeError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+    print(f"rendered → {out.resolve()}")
+    print(f"open with: xdg-open {out}")
+
+    if watch_seconds > 0:
+        import time as _t
+        print(f"watching: re-render every {watch_seconds}s. Browser auto-reloads. Ctrl+C to stop.")
+        try:
+            while True:
+                _t.sleep(watch_seconds)
+                try:
+                    _render_once()
+                    print(f"  refreshed @ {_t.strftime('%H:%M:%S')}")
+                except (ValueError, RuntimeError) as e:
+                    print(f"  refresh failed: {e}", file=sys.stderr)
+        except KeyboardInterrupt:
+            print("\nwatch stopped")
+    return 0
+
+
+def _cmd_daemon(args) -> int:
+    """memoirs daemon {start|stop|status|restart}.
+
+    Spawns watch + extract --daemon as 2 child processes, tracked via pidfile
+    in .memoirs/daemon.pid. Supersedes the manual nohup + pkill workflow.
+    """
+    import signal
+    import subprocess
+    from pathlib import Path
+
+    pidfile = Path(args.db).resolve().parent / "daemon.pid"
+    pidfile.parent.mkdir(parents=True, exist_ok=True)
+
+    def _read_pids() -> list[int]:
+        if not pidfile.exists():
+            return []
+        try:
+            return [int(line.strip()) for line in pidfile.read_text().splitlines() if line.strip()]
+        except (ValueError, OSError):
+            return []
+
+    def _write_pids(pids: list[int]) -> None:
+        pidfile.write_text("\n".join(str(p) for p in pids) + "\n")
+
+    def _alive(pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+            return True
+        except (ProcessLookupError, PermissionError):
+            return False
+
+    if args.daemon_cmd == "status":
+        pids = _read_pids()
+        if not pids:
+            print("daemon: not running (no pidfile)")
+            return 1
+        live = [p for p in pids if _alive(p)]
+        if not live:
+            print(f"daemon: pidfile lists {pids} but none alive — stale; rm {pidfile}")
+            return 1
+        print(f"daemon: {len(live)} processes running (PIDs: {', '.join(map(str, live))})")
+        # Also show last activity from log
+        log_file = _log_path_for(args.db)
+        if log_file.exists():
+            import collections
+            with log_file.open("r", encoding="utf-8", errors="replace") as f:
+                last = collections.deque(f, maxlen=5)
+            print("\nlast 5 log lines:")
+            for line in last:
+                print(f"  {line.rstrip()}")
+        return 0
+
+    if args.daemon_cmd == "stop":
+        pids = _read_pids()
+        if not pids:
+            print("daemon: not running")
+            return 0
+        for pid in pids:
+            if _alive(pid):
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                    print(f"sent SIGTERM to {pid}")
+                except (ProcessLookupError, PermissionError) as e:
+                    print(f"could not stop {pid}: {e}")
+        # Wait up to 10s for graceful shutdown
+        import time as _t
+        deadline = _t.time() + 10
+        while _t.time() < deadline and any(_alive(p) for p in pids):
+            _t.sleep(0.5)
+        survivors = [p for p in pids if _alive(p)]
+        if survivors:
+            print(f"  forcing SIGKILL on {survivors}")
+            for p in survivors:
+                try: os.kill(p, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError): pass
+        try:
+            pidfile.unlink()
+        except OSError:
+            pass
+        print("daemon: stopped")
+        return 0
+
+    if args.daemon_cmd == "restart":
+        # Stop, then re-build args for start with defaults
+        args.daemon_cmd = "stop"
+        _cmd_daemon(args)
+        args.daemon_cmd = "start"
+        # Ensure start defaults are present (restart doesn't inherit them)
+        if not hasattr(args, "watch_path"):
+            args.watch_path = str(Path.home() / ".claude" / "projects")
+        if not hasattr(args, "poll_interval"):
+            args.poll_interval = 60
+        if not hasattr(args, "max_load"):
+            args.max_load = 0.85
+        return _cmd_daemon(args)
+
+    if args.daemon_cmd == "start":
+        # If already running, refuse
+        existing = [p for p in _read_pids() if _alive(p)]
+        if existing:
+            print(f"daemon: already running (PIDs: {existing})")
+            print(f"  use `memoirs daemon stop` first or `memoirs daemon restart`")
+            return 1
+
+        venv = Path(sys.executable).parent
+        memoirs_bin = venv / "memoirs"
+        log_file = _log_path_for(args.db)
+
+        # Optional embed process pool: propagated to every spawned child
+        # so ``embed_text``-driven workloads (extract → upsert embeddings,
+        # consolidation, etc.) bypass the PyTorch GIL. (GAP fix #4.)
+        embed_pool_n = int(getattr(args, "embed_pool", 0) or 0)
+        pool_env: dict[str, str] = {}
+        if embed_pool_n > 0:
+            pool_env["MEMOIRS_EMBED_BACKEND"] = "process_pool"
+            pool_env["MEMOIRS_EMBED_POOL_WORKERS"] = str(embed_pool_n)
+
+        # Spawn watcher
+        watcher_log = open(log_file, "ab")
+        watcher = subprocess.Popen(
+            [str(memoirs_bin), "--db", str(args.db), "watch",
+             args.watch_path, "--interval", "2.0"],
+            stdout=watcher_log, stderr=watcher_log, start_new_session=True,
+            env={**os.environ, **pool_env} if pool_env else None,
+        )
+        # Spawn extract daemon with auto-throttle
+        extract_log = open(log_file, "ab")
+        extract = subprocess.Popen(
+            [str(memoirs_bin), "--db", str(args.db), "extract", "--daemon",
+             "--poll-interval", str(args.poll_interval),
+             "--auto-consolidate",
+             "--max-load", str(args.max_load)],
+            stdout=extract_log, stderr=extract_log,
+            env={**os.environ, "MEMOIRS_CURATOR_GPU_LAYERS": "999", **pool_env},
+            start_new_session=True,
+        )
+        spawned_pids = [watcher.pid, extract.pid]
+        sleep_pid: int | None = None
+        # Sleep-time consolidation (P1-4) — opt-out via --no-sleep.
+        if not getattr(args, "no_sleep", False):
+            sleep_log = open(log_file, "ab")
+            sleep_proc = subprocess.Popen(
+                [str(memoirs_bin), "--db", str(args.db), "sleep", "loop"],
+                stdout=sleep_log, stderr=sleep_log, start_new_session=True,
+            )
+            sleep_pid = sleep_proc.pid
+            spawned_pids.append(sleep_pid)
+        _write_pids(spawned_pids)
+        print(f"daemon: started")
+        print(f"  watcher PID: {watcher.pid}  ({args.watch_path})")
+        print(f"  extract PID: {extract.pid}  (poll {args.poll_interval}s, max_load {args.max_load})")
+        if sleep_pid is not None:
+            print(f"  sleep   PID: {sleep_pid}  (idle-time consolidation)")
+        else:
+            print(f"  sleep   PID: -    (--no-sleep)")
+        if embed_pool_n > 0:
+            print(f"  embed pool: {embed_pool_n} workers (process_pool backend)")
+        print(f"  pidfile: {pidfile}")
+        print(f"  log:     {log_file}")
+        print(f"  follow:  memoirs logs --follow")
+        return 0
+
+    print(f"unknown daemon subcommand: {args.daemon_cmd}", file=sys.stderr)
+    return 1
+
+
+def _cmd_setup(db: MemoirsDB, db_path: str | Path, *, yes: bool, skip_gemma: bool, skip_mcp: bool) -> int:
+    """One-command install: detects what's missing and offers to fix each item."""
+    import shutil
+    import subprocess
+    from pathlib import Path
+    from . import setup_helpers as sh
+
+    def confirm(prompt: str) -> bool:
+        if yes:
+            print(f"  → {prompt} [auto-yes]")
+            return True
+        try:
+            return input(f"  → {prompt} [Y/n]: ").strip().lower() in ("", "y", "yes")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return False
+
+    print("=" * 60)
+    print("  Memoirs · setup")
+    print("=" * 60)
+    venv = Path(sys.executable).parent
+    memoirs_bin = venv / "memoirs"
+    if not memoirs_bin.exists():
+        memoirs_bin = Path(shutil.which("memoirs") or "memoirs")
+    db_path = Path(db_path).resolve()
+
+    # Step 1: optional extras
+    print("\n📦 step 1/6 — Python dependencies (extras)")
+    missing = [name for name, _ in [
+        ("spacy", "extract"), ("watchdog", "realtime"), ("pyvis", "viz"),
+        ("networkx", "viz"), ("sentence_transformers", "embeddings"),
+        ("sqlite_vec", "embeddings"), ("llama_cpp", "gemma"),
+    ] if sh.python_dep_missing(name)]
+    if not missing:
+        print("  ✓ all extras installed")
+    else:
+        print(f"  missing: {', '.join(missing)}")
+        if confirm("install all extras with pip install -e '.[all]'"):
+            cmd = [str(venv / "pip"), "install", "-e", ".[all]"]
+            subprocess.run(cmd, check=False)
+
+    # Step 2: spaCy models
+    print("\n🧠 step 2/6 — spaCy NLP models (en + es)")
+    try:
+        import spacy
+        for name in ("en_core_web_sm", "es_core_news_sm"):
+            try:
+                spacy.util.get_package_path(name)
+                print(f"  ✓ {name} present")
+            except (OSError, IOError):
+                if confirm(f"download {name}"):
+                    subprocess.run(
+                        [str(venv / "python"), "-m", "spacy", "download", name],
+                        check=False,
+                    )
+    except ImportError:
+        print("  ⚠ spaCy not installed; rerun setup after step 1")
+
+    # Step 3: Gemma GGUF
+    print("\n🤖 step 3/6 — Gemma 2B GGUF model")
+    if skip_gemma:
+        print("  → skipped (--skip-gemma)")
+    elif sh.gemma_model_present():
+        mb = sh.GEMMA_MODEL_PATH.stat().st_size / 1024 / 1024
+        print(f"  ✓ already present ({mb:.0f} MB)")
+    else:
+        if confirm("download gemma-2-2b-it-Q4_K_M (~1.6 GB)"):
+            cmd = [str(memoirs_bin), "--db", str(db_path), "models", "pull", "gemma-2b"]
+            subprocess.run(cmd, check=False)
+
+    # Step 4: Vulkan rebuild (only offer if applicable)
+    print("\n⚡ step 4/6 — GPU acceleration")
+    if sh.gpu_offload_available():
+        print("  ✓ llama-cpp already has GPU offload")
+    elif sh.vulkan_buildable():
+        print("  Vulkan SDK detected (glslc found)")
+        if confirm("rebuild llama-cpp-python with -DGGML_VULKAN=on (~5-10 min)"):
+            env = {"CMAKE_ARGS": "-DGGML_VULKAN=on"}
+            cmd = [str(venv / "pip"), "install", "--force-reinstall", "--no-cache-dir",
+                   "--no-binary", "llama-cpp-python", "llama-cpp-python"]
+            subprocess.run(cmd, check=False, env={**os.environ, **env})
+    else:
+        print("  ⚠ no GPU acceleration available")
+        print("    install: sudo apt install glslc libvulkan-dev (Linux + AMD/NVIDIA)")
+
+    # Step 5: DB init
+    print("\n💾 step 5/6 — database init")
+    db.init()
+    print(f"  ✓ DB initialized at {db_path}")
+
+    # Step 6: MCP clients + instruction snippets
+    if skip_mcp:
+        print("\n🤖 step 6/6 — MCP clients (skipped --skip-mcp)")
+    else:
+        print("\n🤖 step 6/6 — MCP clients + instruction snippets")
+        clients = sh.detect_clients()
+        for name, info in clients.items():
+            print(f"  • {name}: {'detected' if info.get('installed') else 'not detected'}")
+
+        # Claude Code workspace MCP + CLAUDE.md
+        if clients["claude_code"]["installed"] or confirm("write Claude Code .mcp.json anyway"):
+            mcp_p = clients["claude_code"]["mcp_config"]
+            r = sh.write_mcp_config_claude_code(mcp_p, memoirs_bin, db_path)
+            print(f"    ✓ {mcp_p} → {r}")
+            if confirm("write Claude Code instructions to workspace CLAUDE.md"):
+                r = sh.write_or_replace_snippet(clients["claude_code"]["instructions_workspace"])
+                print(f"    ✓ CLAUDE.md → {r}")
+
+        # Codex CLI
+        if clients["codex"]["installed"]:
+            mcp_p = clients["codex"]["mcp_config"]
+            r = sh.write_mcp_config_codex(mcp_p, memoirs_bin, db_path)
+            print(f"    ✓ {mcp_p} → {r}")
+            if confirm("write Codex AGENTS.md instructions"):
+                r = sh.write_or_replace_snippet(clients["codex"]["instructions"])
+                print(f"    ✓ AGENTS.md → {r}")
+
+        # VS Code
+        if clients["vscode"]["installed"]:
+            mcp_p = clients["vscode"]["mcp_config"]
+            r = sh.write_mcp_config_vscode(mcp_p, memoirs_bin, db_path)
+            print(f"    ✓ {mcp_p} → {r}")
+            if clients["vscode"].get("has_copilot") and confirm("write Copilot Chat instructions"):
+                r = sh.write_or_replace_snippet(clients["vscode"]["instructions"])
+                print(f"    ✓ copilot-instructions.md → {r}")
+
+        # Cursor
+        if clients["cursor"]["installed"]:
+            if confirm("write Cursor rule (.cursor/rules/memoirs.mdc)"):
+                r = sh.write_cursor_rule(clients["cursor"]["rule_file"])
+                print(f"    ✓ memoirs.mdc → {r}")
+
+    print()
+    print("=" * 60)
+    print("  setup complete — running doctor for verification")
+    print("=" * 60)
+    return _cmd_doctor(db, db_path)
+
+
+def _cmd_doctor(db: MemoirsDB, db_path: str | Path) -> int:
+    """Health check across deps, models, DB, GPU, daemon, MCP clients."""
+    import importlib
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    OK, WARN, FAIL = "✓", "⚠", "✗"
+    issues = 0
+
+    def line(status: str, label: str, detail: str = "", recommendation: str = "") -> None:
+        nonlocal issues
+        if status == FAIL:
+            issues += 1
+        print(f" {status} {label:<40} {detail}")
+        if recommendation:
+            print(f"     → {recommendation}")
+
+    print("=" * 60)
+    print("  Memoirs · doctor")
+    print("=" * 60)
+
+    print("\n📦 dependencies")
+    REQUIRED = [("spacy", "extract"), ("watchdog", "realtime"), ("pyvis", "viz"),
+                ("networkx", "viz"), ("sentence_transformers", "embeddings"),
+                ("sqlite_vec", "embeddings"), ("llama_cpp", "gemma")]
+    for mod, extra in REQUIRED:
+        try:
+            m = importlib.import_module(mod)
+            v = getattr(m, "__version__", "?")
+            line(OK, mod, f"v{v}")
+        except ImportError:
+            line(WARN, mod, "not installed", f"pip install -e '.[{extra}]'")
+
+    print("\n🧠 models")
+    # spaCy
+    try:
+        import spacy  # noqa: F401
+        for name in ("en_core_web_sm", "es_core_news_sm"):
+            try:
+                spacy.util.get_package_path(name)
+                line(OK, f"spaCy/{name}", "installed")
+            except (OSError, IOError):
+                line(WARN, f"spaCy/{name}", "missing",
+                     f".venv/bin/python -m spacy download {name}")
+    except ImportError:
+        line(WARN, "spaCy models", "spacy not installed")
+    # Gemma
+    try:
+        from .engine.curator import GEMMA_MODEL_PATH
+        if GEMMA_MODEL_PATH.exists():
+            mb = GEMMA_MODEL_PATH.stat().st_size / 1024 / 1024
+            line(OK, "Gemma GGUF", f"{mb:.0f} MB at {GEMMA_MODEL_PATH}")
+        else:
+            line(WARN, "Gemma GGUF", "missing", "memoirs models pull gemma-2b")
+    except ImportError:
+        line(WARN, "Gemma path", "import failed")
+
+    print("\n⚡ acceleration")
+    try:
+        import llama_cpp
+        gpu = llama_cpp.llama_supports_gpu_offload()
+        line(OK if gpu else WARN, "llama-cpp GPU offload",
+             "available (Vulkan/CUDA)" if gpu else "CPU-only build",
+             None if gpu else "rebuild with CMAKE_ARGS='-DGGML_VULKAN=on'")
+    except ImportError:
+        line(WARN, "llama-cpp-python", "not installed")
+    # Vulkan SDK presence
+    if shutil.which("glslc"):
+        line(OK, "glslc", "present (Vulkan rebuild possible)")
+    else:
+        line(WARN, "glslc", "missing", "sudo apt install glslc (for Vulkan rebuild)")
+
+    print("\n💾 database")
+    db_p = Path(db_path).resolve()
+    if not db_p.exists():
+        line(FAIL, "DB file", f"not found: {db_p}", "memoirs init")
+    else:
+        size_mb = db_p.stat().st_size / 1024 / 1024
+        wal = db.conn.execute("PRAGMA journal_mode").fetchone()[0]
+        line(OK, "DB file", f"{size_mb:.1f} MB at {db_p}")
+        line(OK if wal == "wal" else WARN, "journal_mode", wal)
+        # sqlite-vec extension
+        try:
+            import sqlite_vec
+            db.conn.enable_load_extension(True)
+            sqlite_vec.load(db.conn)
+            db.conn.enable_load_extension(False)
+            v = db.conn.execute("SELECT vec_version()").fetchone()[0]
+            line(OK, "sqlite-vec", f"loadable {v}")
+        except Exception as e:
+            line(FAIL, "sqlite-vec", f"failed: {type(e).__name__}",
+                 "pip install -e '.[embeddings]'")
+        # Counts
+        s = db.status()
+        line(OK, "counts", f"convs={s['conversations']} msgs={s['active_messages']} "
+             f"sources={s['sources']}")
+        n_mems = db.conn.execute("SELECT COUNT(*) FROM memories WHERE archived_at IS NULL").fetchone()[0]
+        n_emb = db.conn.execute("SELECT COUNT(*) FROM memory_embeddings").fetchone()[0]
+        n_ent = db.conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
+        n_rel = db.conn.execute("SELECT COUNT(*) FROM relationships").fetchone()[0]
+        line(OK if n_mems else WARN, "memorias", f"active={n_mems} embedded={n_emb}",
+             "memoirs extract && memoirs consolidate" if not n_mems else "")
+        line(OK if n_ent else WARN, "entities/relationships", f"entities={n_ent} relationships={n_rel}",
+             "memoirs index-entities" if not n_ent else "")
+
+    print("\n📁 disk")
+    log_path = _log_path_for(db_path)
+    if log_path.exists():
+        log_mb = log_path.stat().st_size / 1024 / 1024
+        line(OK if log_mb < 50 else WARN, "log file", f"{log_mb:.1f} MB",
+             "consider log rotation" if log_mb >= 50 else "")
+    else:
+        line(WARN, "log file", "absent")
+
+    print("\n🔌 processes")
+    try:
+        watcher_pids = subprocess.check_output(
+            ["pgrep", "-af", "memoirs watch"], text=True
+        ).splitlines()
+    except subprocess.CalledProcessError:
+        watcher_pids = []
+    watcher_pids = [p for p in watcher_pids if "pgrep" not in p]
+    line(OK if watcher_pids else WARN, "watcher",
+         f"{len(watcher_pids)} running" if watcher_pids else "not running",
+         "memoirs watch ~/.claude/projects &" if not watcher_pids else "")
+
+    try:
+        daemon_pids = subprocess.check_output(
+            ["pgrep", "-af", "memoirs extract --daemon"], text=True
+        ).splitlines()
+    except subprocess.CalledProcessError:
+        daemon_pids = []
+    daemon_pids = [p for p in daemon_pids if "pgrep" not in p]
+    line(OK if daemon_pids else WARN, "extract daemon",
+         f"{len(daemon_pids)} running" if daemon_pids else "not running",
+         "memoirs extract --daemon --auto-consolidate &" if not daemon_pids else "")
+
+    print("\n🤖 MCP clients")
+    home = Path.home()
+    workspace_mcp = Path.cwd() / ".mcp.json"
+    if workspace_mcp.exists():
+        try:
+            cfg = json.loads(workspace_mcp.read_text())
+            n = len(cfg.get("mcpServers", {}))
+            has_memoirs = "memoirs" in cfg.get("mcpServers", {})
+            line(OK if has_memoirs else WARN, "Claude Code (.mcp.json)",
+                 f"{n} servers, memoirs={'yes' if has_memoirs else 'no'}")
+        except json.JSONDecodeError:
+            line(FAIL, "Claude Code (.mcp.json)", "invalid JSON")
+    else:
+        line(WARN, "Claude Code (.mcp.json)", "absent", "memoirs setup")
+
+    codex_cfg = home / ".codex" / "config.toml"
+    if codex_cfg.exists():
+        text = codex_cfg.read_text()
+        has_mem = "[mcp_servers.memoirs]" in text
+        line(OK if has_mem else WARN, "Codex CLI (~/.codex/config.toml)",
+             "memoirs configured" if has_mem else "memoirs missing",
+             "memoirs setup" if not has_mem else "")
+    else:
+        line(WARN, "Codex CLI", "config absent")
+
+    vscode_mcp = Path.cwd() / ".vscode" / "mcp.json"
+    if vscode_mcp.exists():
+        try:
+            cfg = json.loads(vscode_mcp.read_text())
+            has_mem = "memoirs" in cfg.get("servers", {})
+            line(OK if has_mem else WARN, "VS Code (.vscode/mcp.json)",
+                 "memoirs configured" if has_mem else "memoirs missing")
+        except json.JSONDecodeError:
+            line(FAIL, "VS Code (.vscode/mcp.json)", "invalid JSON")
+    else:
+        line(WARN, "VS Code (.vscode/mcp.json)", "absent")
+
+    # Persistent instruction snippets
+    print("\n📝 client instructions")
+    SNIPPETS_TO_CHECK = [
+        (home / ".claude" / "CLAUDE.md", "global Claude Code"),
+        (Path.cwd() / "CLAUDE.md", "workspace Claude Code"),
+        (home / ".codex" / "AGENTS.md", "Codex CLI"),
+        (Path.cwd() / ".cursor" / "rules" / "memoirs.mdc", "Cursor"),
+        (Path.cwd() / ".github" / "copilot-instructions.md", "Copilot Chat"),
+    ]
+    for p, label in SNIPPETS_TO_CHECK:
+        if p.exists():
+            has_marker = "<!-- memoirs:start -->" in p.read_text()
+            line(OK if has_marker else WARN, label, f"snippet={'yes' if has_marker else 'no'}",
+                 "memoirs setup" if not has_marker else "")
+        else:
+            line(WARN, label, f"file absent: {p.relative_to(home) if home in p.parents else p}")
+
+    print()
+    print("=" * 60)
+    if issues == 0:
+        print(f"  All checks passed. ✓")
+        print("=" * 60)
+        return 0
+    print(f"  {issues} CRITICAL issues — see ✗ above. Run `memoirs setup` to auto-fix many.")
+    print("=" * 60)
+    return 1
+
+
+def _cmd_review(db: MemoirsDB, args) -> int:
+    """Interactive curation of pending memory_candidates.
+
+    Each candidate gets one of: a/y (accept → consolidate), r/n (reject), s (skip),
+    e (edit content), q (quit). With --auto-accept / --auto-reject this runs
+    headless over all matching candidates.
+    """
+    from .engine.curator import Candidate
+    from .engine.memory_engine import apply_decision, decide_memory_action
+    from .core.ids import utc_now
+
+    where = "WHERE status = 'pending'"
+    params: list = []
+    if args.id:
+        where += " AND id LIKE ?"
+        params.append(f"{args.id}%")
+    elif args.type:
+        where += " AND type = ?"
+        params.append(args.type)
+    params.append(args.limit)
+
+    rows = db.conn.execute(
+        f"SELECT id, type, content, importance, confidence, extractor, conversation_id "
+        f"FROM memory_candidates {where} ORDER BY importance DESC, confidence DESC LIMIT ?",
+        params,
+    ).fetchall()
+
+    if not rows:
+        print("no pending candidates matching filters")
+        return 0
+    print(f"reviewing {len(rows)} pending candidates\n")
+
+    accepted = rejected = skipped = edited = 0
+    for i, r in enumerate(rows, 1):
+        c = dict(r)
+        content = c["content"]
+        print(f"[{i}/{len(rows)}] {c['type']:<10} imp={c['importance']} conf={c['confidence']:.2f} extractor={c['extractor']}")
+        print(f"  {content}")
+        if args.auto_accept:
+            choice = "a"
+        elif args.auto_reject:
+            choice = "r"
+        else:
+            try:
+                choice = input("  [a]ccept / [r]eject / [s]kip / [e]dit / [q]uit: ").strip().lower()
+            except (KeyboardInterrupt, EOFError):
+                print("\nstopped")
+                break
+        if choice == "q":
+            break
+        if choice == "s" or choice == "":
+            skipped += 1
+            continue
+        if choice == "e":
+            try:
+                new_content = input("  new content: ").strip()
+            except (KeyboardInterrupt, EOFError):
+                skipped += 1
+                continue
+            if new_content:
+                content = new_content
+                db.conn.execute(
+                    "UPDATE memory_candidates SET content = ?, updated_at = ? WHERE id = ?",
+                    (content, utc_now(), c["id"]),
+                )
+                db.conn.commit()
+                edited += 1
+                # Default to accept after edit
+                choice = "a"
+            else:
+                skipped += 1
+                continue
+        if choice in ("a", "y"):
+            cand = Candidate(
+                type=c["type"],
+                content=content,
+                importance=int(c["importance"]),
+                confidence=float(c["confidence"]),
+            )
+            decision = decide_memory_action(db, cand)
+            result = apply_decision(db, cand, decision)
+            db.conn.execute(
+                "UPDATE memory_candidates SET status = 'accepted', "
+                "promoted_memory_id = ?, updated_at = ? WHERE id = ?",
+                (result.get("memory_id"), utc_now(), c["id"]),
+            )
+            db.conn.commit()
+            accepted += 1
+            print(f"  → accepted as memory {result.get('memory_id', '-')[:16]} ({decision.action})")
+        elif choice in ("r", "n"):
+            db.conn.execute(
+                "UPDATE memory_candidates SET status = 'rejected', "
+                "rejection_reason = 'user-rejected via review', updated_at = ? WHERE id = ?",
+                (utc_now(), c["id"]),
+            )
+            db.conn.commit()
+            rejected += 1
+            print("  → rejected")
+        else:
+            skipped += 1
+        print()
+
+    print(f"\nreview done: {accepted} accepted, {rejected} rejected, {skipped} skipped, {edited} edited")
+    return 0
+
+
+_MODEL_CATALOG = {
+    "gemma-2b": {
+        "filename": "gemma-2-2b-it-Q4_K_M.gguf",
+        "url": "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+        "size_bytes": 1_708_582_752,
+        "description": "Gemma 2 2B Instruct (Q4_K_M ≈ 1.6 GB)",
+    },
+}
+
+
+def _cmd_models(args) -> int:
+    from .config import GEMMA_MODEL_PATH
+
+    models_dir = GEMMA_MODEL_PATH.parent
+    models_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.models_cmd == "list":
+        if not models_dir.exists() or not any(models_dir.iterdir()):
+            print(f"no models in {models_dir}")
+            return 0
+        for f in sorted(models_dir.iterdir()):
+            if f.is_file():
+                print(f"  {f.stat().st_size / 1024 / 1024:>8.1f} MB  {f.name}")
+        return 0
+
+    if args.models_cmd == "pull":
+        spec = _MODEL_CATALOG[args.name]
+        target = models_dir / spec["filename"]
+        if target.exists() and not args.force:
+            mb = target.stat().st_size / 1024 / 1024
+            print(f"already present ({mb:.1f} MB): {target}")
+            print("use --force to re-download")
+            return 0
+        import urllib.request
+
+        print(f"downloading {spec['description']} → {target}")
+        print(f"  ({spec['size_bytes'] / 1024 / 1024:.0f} MB, may take a few minutes)")
+
+        def _hook(blocks: int, block_size: int, total: int) -> None:
+            if total <= 0:
+                return
+            done = blocks * block_size
+            pct = min(100, int(100 * done / total))
+            bar = "#" * (pct // 2) + "." * (50 - pct // 2)
+            sys.stdout.write(f"\r  [{bar}] {pct:3d}%  {done / 1024 / 1024:>7.1f} MB")
+            sys.stdout.flush()
+
+        urllib.request.urlretrieve(spec["url"], target, reporthook=_hook)
+        print()
+        actual_size = target.stat().st_size
+        if abs(actual_size - spec["size_bytes"]) > 4096:
+            print(f"warning: size mismatch (got {actual_size}, expected {spec['size_bytes']})")
+            return 1
+        print(f"saved {actual_size / 1024 / 1024:.1f} MB → {target}")
+        print(f"set MEMOIRS_GEMMA_MODEL={target} or leave the default to use it.")
+        return 0
+
+    return 1
+
+
+def _cmd_tool_calls(db: MemoirsDB, args) -> int:
+    """Dispatch ``memoirs tool-calls {list|stats}`` (P1-8 tool-call memory)."""
+    from .engine.memory_engine import summarize_tool_calls
+
+    if args.tool_calls_cmd == "list":
+        clauses = ["type = 'tool_call'", "archived_at IS NULL"]
+        params: list = []
+        if args.name:
+            clauses.append("tool_name = ?")
+            params.append(args.name)
+        if args.status:
+            clauses.append("tool_status = ?")
+            params.append(args.status)
+        sql = (
+            "SELECT id, tool_name, tool_status, tool_result_hash, "
+            "       importance, created_at, content "
+            "FROM memories WHERE " + " AND ".join(clauses) +
+            " ORDER BY created_at DESC LIMIT ?"
+        )
+        params.append(int(args.limit))
+        rows = [dict(r) for r in db.conn.execute(sql, params).fetchall()]
+        if args.json:
+            print(json.dumps(rows, indent=2, ensure_ascii=False))
+            return 0
+        if not rows:
+            print("(no tool_call memorias match)")
+            return 0
+        print(f"  {'created_at':<26} {'tool':<28} {'status':<9} {'imp':>3} id              content")
+        print("  " + "-" * 110)
+        for r in rows:
+            content = " ".join((r["content"] or "").split())
+            if len(content) > 60:
+                content = content[:57] + "..."
+            tool = (r["tool_name"] or "")[:28]
+            status = (r["tool_status"] or "")[:9]
+            print(
+                f"  {r['created_at']:<26} {tool:<28} {status:<9} "
+                f"{r['importance']:>3} {r['id'][:14]}  {content}"
+            )
+        return 0
+
+    if args.tool_calls_cmd == "stats":
+        stats = summarize_tool_calls(db, args.name, limit=int(args.limit))
+        if args.json:
+            print(json.dumps([s.to_dict() for s in stats], indent=2, ensure_ascii=False))
+            return 0
+        if not stats:
+            print("(no tool_call memorias)")
+            return 0
+        print(f"  {'tool':<32} {'count':>6} {'success':>7} {'errors':>7} "
+              f"{'cancel':>7} {'rate':>6} {'imp':>5}  last_recorded_at")
+        print("  " + "-" * 100)
+        for s in stats:
+            print(
+                f"  {s.tool_name[:32]:<32} {s.count:>6} {s.success_count:>7} "
+                f"{s.error_count:>7} {s.cancelled_count:>7} "
+                f"{s.success_rate * 100:>5.1f}% {s.avg_importance:>5.2f}  "
+                f"{s.last_recorded_at or '-'}"
+            )
+        return 0
+
+    print(f"unknown tool-calls subcommand: {args.tool_calls_cmd}", file=sys.stderr)
+    return 1
+
+
+def _cmd_conflicts(db: MemoirsDB, args) -> int:
+    """Dispatch ``memoirs conflicts {list|show|resolve}`` (P5-2)."""
+    from .engine.conflicts import (
+        get_conflict, list_conflicts, resolve_conflict,
+    )
+
+    sub = getattr(args, "conflicts_cmd", None)
+
+    if sub == "list":
+        status_arg = (args.status or "pending").lower()
+        # Friendly aliases mirroring CLI ergonomics: `resolved` matches any of
+        # the resolved_* statuses (all five branches), `all` removes the
+        # filter, anything else is treated as an exact match.
+        if status_arg == "all":
+            rows = list_conflicts(db, status=None, limit=int(args.limit))
+        elif status_arg == "resolved":
+            rows = list_conflicts(db, status=None, limit=int(args.limit) * 4)
+            rows = [r for r in rows if (r["status"] or "").startswith("resolved_")]
+            rows = rows[: int(args.limit)]
+        else:
+            rows = list_conflicts(db, status=status_arg, limit=int(args.limit))
+        if args.json:
+            print(json.dumps(rows, indent=2, ensure_ascii=False, default=str))
+            return 0
+        if not rows:
+            print(f"(no conflicts match status={status_arg!r})")
+            return 0
+        print(f"  {'id':>5}  {'status':<20}  {'sim':>6}  {'detector':<10}  "
+              f"{'detected_at':<26}  pair")
+        print("  " + "-" * 110)
+        for r in rows:
+            sim = r["similarity"]
+            sim_str = f"{sim:.3f}" if isinstance(sim, (int, float)) else "  —  "
+            pair = f"{(r['memory_a_id'] or '')[:14]} ↔ {(r['memory_b_id'] or '')[:14]}"
+            print(
+                f"  {r['id']:>5}  {(r['status'] or '')[:20]:<20}  {sim_str:>6}  "
+                f"{(r['detector'] or '-')[:10]:<10}  "
+                f"{(r['detected_at'] or '')[:26]:<26}  {pair}"
+            )
+        return 0
+
+    if sub == "show":
+        row = get_conflict(db, int(args.conflict_id))
+        if not row:
+            print(f"conflict {args.conflict_id} not found", file=sys.stderr)
+            return 1
+        if args.json:
+            print(json.dumps(row, indent=2, ensure_ascii=False, default=str))
+            return 0
+        print(f"conflict #{row['id']}  status={row['status']}  detector={row['detector'] or '-'}")
+        sim = row["similarity"]
+        if isinstance(sim, (int, float)):
+            print(f"  similarity = {sim:.3f}")
+        if row.get("reason"):
+            print(f"  reason     = {row['reason']}")
+        print(f"  detected_at = {row['detected_at']}")
+        if row.get("resolved_at"):
+            print(f"  resolved_at = {row['resolved_at']}")
+        if row.get("resolution_notes"):
+            print(f"  notes      = {row['resolution_notes']}")
+        print()
+        print(f"-- Memory A ({row['memory_a_id']}) [{row.get('a_type') or '-'}]"
+              f"{' ARCHIVED' if row.get('a_archived_at') else ''} --")
+        print(row.get("a_content") or "(missing)")
+        print()
+        print(f"-- Memory B ({row['memory_b_id']}) [{row.get('b_type') or '-'}]"
+              f"{' ARCHIVED' if row.get('b_archived_at') else ''} --")
+        print(row.get("b_content") or "(missing)")
+        return 0
+
+    if sub == "resolve":
+        try:
+            report = resolve_conflict(
+                db, int(args.conflict_id),
+                action=args.action, notes=args.notes,
+            )
+        except ValueError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        if args.json:
+            print(json.dumps(report, indent=2, ensure_ascii=False, default=str))
+            return 0
+        print(f"conflict {report['conflict_id']} → {report['status']}")
+        if report["archived"]:
+            print(f"  archived: {', '.join(report['archived'])}")
+        if report["new_memory_id"]:
+            print(f"  new memory: {report['new_memory_id']}")
+        if report["notes"]:
+            print(f"  notes: {report['notes']}")
+        return 0
+
+    print(f"unknown conflicts subcommand: {sub}", file=sys.stderr)
+    return 1
+
+
+def _cmd_links(db: MemoirsDB, args) -> int:
+    """Dispatch ``memoirs links {rebuild|show}`` (P1-3 A-MEM Zettelkasten)."""
+    from .engine import zettelkasten as zk
+
+    if args.links_cmd == "rebuild":
+        zk.ensure_schema(db.conn)
+        result = zk.recompute_links(
+            db,
+            batch_size=args.batch_size,
+            top_k=args.top_k,
+            threshold=args.threshold,
+            mode=args.mode,
+            include_shared_entities=not args.no_shared_entities,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+
+    if args.links_cmd == "prune":
+        zk.ensure_schema(db.conn)
+        result = zk.prune_excess_links(
+            db,
+            max_per_memory=args.max_per_memory,
+            min_similarity=args.min_similarity,
+            reason=args.reason,
+            dry_run=args.dry_run,
+        )
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+
+    if args.links_cmd == "stats":
+        zk.ensure_schema(db.conn)
+        result = zk.link_stats(db)
+        if args.json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 0
+        # Pretty table.
+        total = result["total"]
+        ds = result["distinct_sources"]
+        ps = result["per_source"]
+        print("=== memory_links stats ===")
+        print(f"  total links     : {total:,}")
+        print(f"  distinct sources: {ds:,}")
+        print(f"  per-source      : max={ps['max']}  avg={ps['avg']}  p95={ps['p95']}")
+        if result["by_reason"]:
+            print("  by reason       :")
+            for reason, count in sorted(result["by_reason"].items(), key=lambda kv: -kv[1]):
+                print(f"    {reason:<20} {count:,}")
+        # Histogram (10 buckets, [0,1] split into 0.1-wide bins).
+        hist = result["similarity_histogram"]
+        max_count = max(hist) if hist else 0
+        bar_width = 40
+        print("  similarity dist :")
+        for i, c in enumerate(hist):
+            lo = i / 10.0
+            hi = (i + 1) / 10.0
+            bar = "#" * int((c / max_count) * bar_width) if max_count else ""
+            label = f"[{lo:.1f}-{hi:.1f}{')' if i < 9 else ']'}"
+            print(f"    {label:<11} {c:>10,}  {bar}")
+        return 0
+
+    if args.links_cmd == "show":
+        # Resolve prefix → full id
+        row = db.conn.execute(
+            "SELECT id, type, content FROM memories WHERE id LIKE ? AND archived_at IS NULL LIMIT 1",
+            (f"{args.memory_id}%",),
+        ).fetchone()
+        if not row:
+            print(f"no active memory matching '{args.memory_id}'", file=sys.stderr)
+            return 1
+        memory_id = row["id"]
+        zk.ensure_schema(db.conn)
+        reasons = tuple(args.reason) if args.reason else None
+        neighbors = zk.get_neighbors(
+            db,
+            memory_id,
+            max_depth=args.depth,
+            min_similarity=args.min_similarity,
+            reasons=reasons,
+        )
+        if args.json:
+            print(json.dumps(
+                {
+                    "memory": {"id": row["id"], "type": row["type"], "content": row["content"]},
+                    "neighbors": [n.to_dict() for n in neighbors],
+                },
+                indent=2,
+                ensure_ascii=False,
+            ))
+            return 0
+
+        # Pretty-print a small table.
+        print(f"\n=== Memory {memory_id[:16]}... ({row['type']}) ===")
+        content = " ".join(row["content"].split())
+        if len(content) > 100:
+            content = content[:97] + "..."
+        print(f"  {content}")
+        print(f"\n=== Neighbors (depth ≤ {args.depth}, sim ≥ {args.min_similarity:.2f}) ===")
+        if not neighbors:
+            print("  (none)")
+            return 0
+        print(f"  {'depth':>5} {'sim':>5} {'reason':<14} {'type':<10} id              content")
+        print(f"  {'-' * 70}")
+        for n in neighbors:
+            n_content = " ".join(n.content.split())
+            if len(n_content) > 60:
+                n_content = n_content[:57] + "..."
+            print(f"  {n.depth:>5} {n.similarity:>5.2f} {n.reason or '-':<14} "
+                  f"{n.type:<10} {n.memory_id[:14]}  {n_content}")
+        return 0
+
+    print(f"unknown links subcommand: {args.links_cmd}", file=sys.stderr)
+    return 1
+
+
+def _cmd_why(db: MemoirsDB, args) -> int:
+    """Render the provenance chain (P1-9) for ``memory_id`` given ``--query``.
+
+    Default output is a compact table; pass ``--json`` for the raw step
+    objects (useful for debugging or piping into other tools).
+    """
+    from .engine import explain as explain_mod
+
+    chain = explain_mod.build_provenance_chain(
+        db,
+        args.query or "",
+        None,
+        args.memory_id,
+        max_hops=int(args.max_hops),
+    )
+    if args.json:
+        print(json.dumps(chain, indent=2, ensure_ascii=False))
+        return 0
+
+    print(f"why  memory_id={args.memory_id}  query={args.query!r}  hops<={args.max_hops}")
+    print(f"  {'#':>2}  {'kind':<18}  detail")
+    print("  " + "-" * 70)
+    for step in chain:
+        kind = step.get("kind", "?")
+        if kind == "query":
+            detail = f"\"{step.get('value', '') or args.query}\""
+        elif kind == "entity_match":
+            detail = f"{step.get('entity', '')}  conf={step.get('confidence', 0):.2f}"
+        elif kind == "entity_relation":
+            detail = (
+                f"{step.get('from', '')}  --[{step.get('relation', 'related_to')}]--> "
+                f"{step.get('to', '')}"
+            )
+        elif kind == "entity_to_memory":
+            detail = f"{step.get('entity', '')}  ->  {step.get('memory_id', '')}"
+        elif kind == "memory_to_entity":
+            detail = f"{step.get('memory_id', '')}  ->  {step.get('entity', '')}"
+        elif kind == "memory_link":
+            detail = (
+                f"{step.get('from', '')}  ->  {step.get('to', '')}  "
+                f"sim={step.get('similarity', 0):.3f} reason={step.get('reason', '')}"
+            )
+        elif kind == "semantic_match":
+            detail = f"score={step.get('score', 0):.3f}"
+        elif kind == "not_found":
+            detail = f"memory {step.get('memory_id', '')} not found"
+        else:
+            detail = json.dumps({k: v for k, v in step.items() if k not in {"step", "kind"}})
+        print(f"  {step.get('step', 0):>2}  {kind:<18}  {detail}")
+    return 0
+
+
+def _cmd_raptor(db: MemoirsDB, args) -> int:
+    """Dispatch ``memoirs raptor {build|stats|show|query}`` (P1-6)."""
+    from .engine import raptor as rp
+
+    sub = args.raptor_cmd
+    if sub == "build":
+        rp.ensure_schema(db)
+        llm = None
+        if getattr(args, "use_llm", False):
+            from .engine.curator import _have_curator, _get_llm
+            if _have_curator():
+                try:
+                    llm = _get_llm()
+                except Exception as e:
+                    print(f"warning: could not load Gemma ({e}); using heuristic",
+                          file=sys.stderr)
+                    llm = None
+            else:
+                print("warning: Gemma not installed; using heuristic summarizer",
+                      file=sys.stderr)
+        tree = rp.build_raptor_tree(
+            db,
+            scope_kind=args.scope,
+            scope_id=args.scope_id,
+            max_levels=args.max_levels,
+            k_per_cluster=args.k_per_cluster,
+            llm=llm,
+            rebuild=args.rebuild,
+        )
+        print(json.dumps({
+            "scope_kind": tree.scope_kind,
+            "scope_id": tree.scope_id,
+            "leaf_count": tree.leaf_count,
+            "levels": tree.levels,
+            "root_id": tree.root_id,
+        }, indent=2, ensure_ascii=False))
+        return 0
+
+    if sub == "stats":
+        rp.ensure_schema(db)
+        result = rp.stats(db, scope_kind=args.scope, scope_id=args.scope_id)
+        if getattr(args, "json", False):
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            return 0
+        print("=== raptor stats ===")
+        print(f"  scope     : {result.get('scope_kind') or 'all'}")
+        if "scope_id" in result:
+            print(f"  scope_id  : {result.get('scope_id')}")
+        if "leaf_count" in result:
+            print(f"  leaves    : {result['leaf_count']:,}")
+        if "root_id" in result:
+            print(f"  root      : {result.get('root_id') or '-'}")
+        print("  levels    :")
+        for entry in result.get("levels", []):
+            level = entry.get("level")
+            count = entry.get("c")
+            scope = entry.get("scope_kind") or ""
+            scope_id = entry.get("scope_id") or ""
+            extra = f"  [{scope}/{scope_id}]" if scope else ""
+            print(f"    L{level:<2} count={count:>6}{extra}")
+        return 0
+
+    if sub == "show":
+        node = rp.get_node(db, args.node_id)
+        if not node:
+            print(f"no summary node matching '{args.node_id}'", file=sys.stderr)
+            return 1
+        if getattr(args, "json", False):
+            if args.recursive:
+                node["descendants"] = rp._collect_leaf_memories(db, node["id"])
+            print(json.dumps(node, indent=2, ensure_ascii=False))
+            return 0
+        print(f"\n=== summary node {node['id']} ===")
+        print(f"  level       : {node['level']}")
+        print(f"  scope       : {node.get('scope_kind') or '-'}/{node.get('scope_id') or '-'}")
+        print(f"  parent      : {node.get('parent_id') or '-'}")
+        print(f"  child_count : {node['child_count']}")
+        print(f"  created_at  : {node['created_at']}")
+        print(f"  content     :\n    {node['content']}")
+        members = node.get("members", [])
+        print(f"\n=== members ({len(members)}) ===")
+        for m in members[:50]:
+            sim = m.get("similarity") or 0.0
+            print(f"  [{m['member_kind']:<7}] sim={sim:.3f}  {m['member_id']}")
+        if len(members) > 50:
+            print(f"  ... +{len(members) - 50} more")
+        if args.recursive:
+            leaves = rp._collect_leaf_memories(db, node["id"])
+            print(f"\n=== descendant leaf memories ({len(leaves)}) ===")
+            for mid in leaves[:50]:
+                print(f"  {mid}")
+            if len(leaves) > 50:
+                print(f"  ... +{len(leaves) - 50} more")
+        return 0
+
+    if sub == "query":
+        results = rp.raptor_search(
+            db,
+            args.query,
+            top_k=args.top_k,
+            scope_kind=args.scope,
+            scope_id=args.scope_id,
+            prefer_high_level=args.prefer_high_level,
+        )
+        if getattr(args, "json", False):
+            print(json.dumps({"query": args.query, "results": results},
+                             indent=2, ensure_ascii=False))
+            return 0
+        print(f"\n=== raptor query: {args.query!r} ===")
+        for r in results:
+            print(f"  L{r['level']:<2} score={r['score']:.3f}  {r['memory_id']}  "
+                  f"path={'/'.join(p[:12] for p in r['path'])}")
+        if not results:
+            print("  (no results)")
+        return 0
+
+    print(f"unknown raptor subcommand: {sub}", file=sys.stderr)
+    return 1
+
+
+def _cmd_trace(db: MemoirsDB, conv_id: str, as_json: bool) -> int:
+    """Show the full pipeline trace for a conversation: source → messages → candidates → memories."""
+    row = db.conn.execute(
+        "SELECT c.id, c.title, c.message_count, s.uri, s.kind, s.name "
+        "FROM conversations c JOIN sources s ON s.id = c.source_id "
+        "WHERE c.id LIKE ? OR c.external_id LIKE ? LIMIT 1",
+        (f"{conv_id}%", f"{conv_id}%"),
+    ).fetchone()
+    if not row:
+        print(f"no conversation matching '{conv_id}'", file=sys.stderr)
+        return 1
+    conv = dict(row)
+    cid = conv["id"]
+
+    candidates = [
+        dict(r)
+        for r in db.conn.execute(
+            "SELECT id, type, content, importance, confidence, status, rejection_reason, "
+            "promoted_memory_id, extractor "
+            "FROM memory_candidates WHERE conversation_id = ? ORDER BY created_at",
+            (cid,),
+        ).fetchall()
+    ]
+    promoted_ids = [c["promoted_memory_id"] for c in candidates if c["promoted_memory_id"]]
+    memories = []
+    if promoted_ids:
+        placeholders = ",".join("?" * len(promoted_ids))
+        memories = [
+            dict(r)
+            for r in db.conn.execute(
+                f"SELECT id, type, content, score, importance, confidence, archived_at "
+                f"FROM memories WHERE id IN ({placeholders})",
+                promoted_ids,
+            ).fetchall()
+        ]
+
+    if as_json:
+        print(json.dumps({"conversation": conv, "candidates": candidates, "memories": memories}, indent=2, ensure_ascii=False))
+        return 0
+
+    print(f"\n=== Conversation {cid[:16]}... ===")
+    print(f"  source: {conv['kind']:<12} {conv['name']}")
+    print(f"  uri:    {conv['uri']}")
+    print(f"  title:  {conv['title']}")
+    print(f"  messages: {conv['message_count']}")
+
+    print(f"\n=== Memory candidates ({len(candidates)}) ===")
+    by_status: dict[str, int] = {}
+    for c in candidates:
+        by_status[c["status"]] = by_status.get(c["status"], 0) + 1
+    print(f"  by status: {by_status}")
+    for c in candidates[:25]:
+        content = " ".join(c["content"].split())
+        if len(content) > 90:
+            content = content[:87] + "..."
+        promoted = (c["promoted_memory_id"] or "-")[:14]
+        rej = f" [{c['rejection_reason']}]" if c["rejection_reason"] else ""
+        print(f"  {c['type']:<10} {c['status']:<8} {promoted:<14} {content}{rej}")
+    if len(candidates) > 25:
+        print(f"  ... +{len(candidates) - 25} more")
+
+    print(f"\n=== Memories created ({len(memories)}) ===")
+    for m in memories:
+        content = " ".join(m["content"].split())
+        if len(content) > 90:
+            content = content[:87] + "..."
+        archived = " [archived]" if m["archived_at"] else ""
+        print(f"  {m['type']:<10} score={m['score']:.3f} {m['id'][:16]}... {content}{archived}")
+    print()
+    return 0
+
+
+def _cmd_logs(
+    db_path: str | Path,
+    tail: int,
+    follow: bool,
+    fmt: str | None = None,
+) -> int:
+    log_file = _log_path_for(db_path)
+    if not log_file.exists():
+        print(f"no log yet at {log_file}", file=sys.stderr)
+        return 1
+    import collections
+    import time as _time
+
+    def _emit(line: str) -> None:
+        if fmt == "json":
+            stripped = line.rstrip("\n")
+            try:
+                obj = json.loads(stripped)
+                sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+            except (ValueError, TypeError):
+                # Non-JSON line — pretty-print as a synthetic record.
+                sys.stdout.write(json.dumps({"raw": stripped}, ensure_ascii=False) + "\n")
+        elif fmt == "text":
+            stripped = line.rstrip("\n")
+            try:
+                obj = json.loads(stripped)
+                ts = obj.get("ts", "")
+                level = obj.get("level", "")
+                logger = obj.get("logger", "")
+                msg = obj.get("msg", "")
+                sys.stdout.write(f"{ts} {logger} {level} {msg}\n")
+            except (ValueError, TypeError):
+                sys.stdout.write(line if line.endswith("\n") else line + "\n")
+        else:
+            sys.stdout.write(line)
+
+    with log_file.open("r", encoding="utf-8", errors="replace") as f:
+        last = collections.deque(f, maxlen=tail)
+    for line in last:
+        _emit(line)
+    sys.stdout.flush()
+    if not follow:
+        return 0
+    with log_file.open("r", encoding="utf-8", errors="replace") as f:
+        f.seek(0, 2)
+        try:
+            while True:
+                chunk = f.readline()
+                if chunk:
+                    _emit(chunk)
+                    sys.stdout.flush()
+                else:
+                    _time.sleep(0.5)
+        except KeyboardInterrupt:
+            return 0
+
+
+def _print_resume_payload(payload: dict) -> None:
+    """Render a ``resume_thread`` dict as a friendly text report."""
+    cid = payload.get("conversation_id") or "?"
+    print(f"Conversation: {cid}")
+    if payload.get("auto_detected"):
+        print("  (auto-detected from cwd)")
+    summary = payload.get("summary")
+    if summary:
+        print()
+        print("Summary:")
+        print(f"  {summary}")
+    else:
+        print()
+        print("Summary: (none — conversation may be empty or LLM unavailable)")
+    generated_at = payload.get("generated_at")
+    if generated_at:
+        print(f"Generated at: {generated_at}")
+    msg_count = payload.get("message_count_at_summary")
+    if msg_count is not None:
+        print(f"Messages at summary: {msg_count}")
+
+    recent = payload.get("recent_tool_calls") or []
+    if recent:
+        print()
+        print(f"Recent commands ({len(recent)}):")
+        for tc in recent[:8]:
+            line = _format_tool_call_line(tc)
+            if line:
+                print(f"  {line}")
+
+    decisions = payload.get("last_decisions") or []
+    if decisions:
+        print()
+        print("Last decisions:")
+        for d in decisions:
+            print(f"  - {d}")
+
+    pending = payload.get("pending_actions") or []
+    if pending:
+        print()
+        print("Pending tasks:")
+        for p in pending:
+            print(f"  - {p}")
+
+    salient = payload.get("salient_memories") or []
+    if salient:
+        print()
+        print(f"Salient memories ({len(salient)}):")
+        for m in salient[:8]:
+            content = (m.get("content") or "").replace("\n", " ")
+            if len(content) > 110:
+                content = content[:107] + "..."
+            mid = (m.get("id") or "")[:12]
+            print(f"  [{m.get('type','?'):<10}] {mid}  {content}")
+    proj = payload.get("project_context")
+    if proj and proj.get("project"):
+        print()
+        print(f"Project context: {proj.get('project')} "
+              f"({len(proj.get('memories') or [])} memories, "
+              f"{len(proj.get('related_entities') or [])} related entities)")
+
+
+def _format_tool_call_line(tc: dict) -> str:
+    """One-line render of a tool_call memory row for ``current``/``commands list``."""
+    tool = (tc.get("tool_name") or "?")[:10]
+    status = (tc.get("tool_status") or "?")[:9]
+    mark = "OK" if status == "success" else ("ER" if status == "error" else "--")
+    summary = _summarize_tool_args(tc)
+    ts = _format_tool_call_ts(tc)
+    return f"{mark} {tool:<10} {summary:<46} {ts}"
+
+
+def _summarize_tool_args(tc: dict) -> str:
+    """Build a short, copy-paste-friendly summary from ``tool_args_json``."""
+    name = (tc.get("tool_name") or "").lower()
+    args_raw = tc.get("tool_args_json") or "{}"
+    try:
+        args = json.loads(args_raw) if isinstance(args_raw, str) else dict(args_raw or {})
+    except (TypeError, ValueError):
+        args = {}
+    if not isinstance(args, dict):
+        args = {}
+
+    if name in {"bash", "shell"}:
+        cmd = args.get("command") or args.get("cmd") or ""
+        if isinstance(cmd, str):
+            cmd = " ".join(cmd.split())
+            return cmd[:70] if len(cmd) <= 70 else cmd[:67] + "..."
+    if name in {"read", "write"}:
+        path = args.get("file_path") or args.get("path") or ""
+        return str(path)[:70]
+    if name == "edit":
+        path = args.get("file_path") or ""
+        return str(path)[:70]
+    if name == "grep":
+        pattern = args.get("pattern") or ""
+        path = args.get("path") or ""
+        joined = f"{pattern} in {path}" if path else str(pattern)
+        return joined[:70]
+    if name == "glob":
+        return str(args.get("pattern") or "")[:70]
+    if name == "todowrite":
+        todos = args.get("todos") or []
+        if isinstance(todos, list):
+            return f"{len(todos)} todos"
+    if name == "webfetch":
+        return str(args.get("url") or "")[:70]
+    try:
+        compact = json.dumps(args, ensure_ascii=False)
+    except (TypeError, ValueError):
+        compact = str(args)
+    return compact[:70]
+
+
+def _format_tool_call_ts(tc: dict) -> str:
+    """Pull a short ``HH:MM`` (or ``MM-DD HH:MM``) timestamp string."""
+    md_raw = tc.get("metadata_json") or "{}"
+    try:
+        md = json.loads(md_raw) if isinstance(md_raw, str) else dict(md_raw or {})
+    except (TypeError, ValueError):
+        md = {}
+    raw = (md.get("timestamp") if isinstance(md, dict) else None) or tc.get("created_at")
+    if not raw:
+        return ""
+    try:
+        from datetime import datetime
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return str(raw)[:16]
+    return dt.strftime("%m-%d %H:%M")
+
+
+def _resolve_memory_id_prefix(db: MemoirsDB, prefix: str) -> str:
+    """Resolve a (possibly truncated) conversation id by exact match first,
+    then unique-prefix lookup. Raises ValueError on ambiguity / not found."""
+    if not prefix:
+        raise ValueError("conversation_id required")
+    row = db.conn.execute(
+        "SELECT id FROM conversations WHERE id = ? LIMIT 1", (prefix,),
+    ).fetchone()
+    if row:
+        return row["id"]
+    rows = db.conn.execute(
+        "SELECT id FROM conversations WHERE id LIKE ? LIMIT 2",
+        (prefix + "%",),
+    ).fetchall()
+    if not rows:
+        raise ValueError(f"no conversation matches '{prefix}'")
+    if len(rows) > 1:
+        raise ValueError(f"ambiguous conversation_id prefix '{prefix}'")
+    return rows[0]["id"]
+
+
+def _cmd_commands(db: MemoirsDB, args) -> int:
+    """Dispatch ``memoirs commands {list|show|stats|replay}``."""
+    sub = getattr(args, "commands_cmd", None)
+    if sub == "list":
+        return _cmd_commands_list(db, args)
+    if sub == "show":
+        return _cmd_commands_show(db, args)
+    if sub == "stats":
+        return _cmd_commands_stats(db, args)
+    if sub == "replay":
+        return _cmd_commands_replay(db, args)
+    print(f"unknown commands subcommand: {sub}", file=sys.stderr)
+    return 1
+
+
+def _cmd_snapshot(db: MemoirsDB, args) -> int:
+    """Dispatch ``memoirs snapshot {create|list|diff|restore}``."""
+    from .engine import snapshots as _snap
+
+    sub = getattr(args, "snapshot_cmd", None)
+    db_path = Path(args.db) if getattr(args, "db", None) else Path(db.path)
+
+    if sub == "create":
+        info = _snap.create(db_path, name=args.name)
+        print(f"snapshot created: {info.path}")
+        print(f"  name={info.name}  size={info.size_bytes:,} bytes  memorias={info.memory_count}")
+        return 0
+    if sub == "list":
+        snaps = _snap.list_snapshots(db_path)
+        if not snaps:
+            print("(no snapshots yet)")
+            return 0
+        print(f"{'created_at':<22} {'memorias':>9} {'size':>10}  name")
+        for s in snaps:
+            print(f"{s.created_at:<22} {s.memory_count:>9} {s.size_bytes:>10,}  {s.name}")
+        return 0
+    if sub == "diff":
+        a = db_path if args.a == "live" else Path(args.a)
+        b = db_path if args.b == "live" else Path(args.b)
+        d = _snap.diff(a, b)
+        if args.json:
+            print(json.dumps(d, indent=2))
+        else:
+            print(f"a: {a}  ({d['a_count']} active memorias)")
+            print(f"b: {b}  ({d['b_count']} active memorias)")
+            print(f"  + added:   {len(d['added'])}")
+            print(f"  - removed: {len(d['removed'])}")
+            print(f"  ~ changed: {len(d['changed'])}")
+        return 0
+    if sub == "restore":
+        if not args.yes:
+            print(f"This will overwrite {db_path}")
+            print(f"with {args.snapshot_path}")
+            print("(a safety snapshot of the current DB will be created first)")
+            ans = input("type 'yes' to proceed: ").strip().lower()
+            if ans != "yes":
+                print("aborted")
+                return 1
+        db.close()  # release the live connection before swap
+        info = _snap.restore(args.snapshot_path, db_path)
+        print(f"restored from {info.path}")
+        return 0
+    print(f"unknown snapshot subcommand: {sub}", file=sys.stderr)
+    return 1
+
+
+def _resolve_tool_call_id_prefix(db: MemoirsDB, prefix: str) -> str:
+    """Resolve a (possibly truncated) tool_call memory id."""
+    if not prefix:
+        raise ValueError("memory_id required")
+    row = db.conn.execute(
+        "SELECT id FROM memories WHERE id = ? AND type = 'tool_call' LIMIT 1",
+        (prefix,),
+    ).fetchone()
+    if row:
+        return row["id"]
+    rows = db.conn.execute(
+        "SELECT id FROM memories WHERE id LIKE ? AND type = 'tool_call' LIMIT 2",
+        (prefix + "%",),
+    ).fetchall()
+    if not rows:
+        raise ValueError(f"no tool_call memory matches '{prefix}'")
+    if len(rows) > 1:
+        raise ValueError(f"ambiguous memory_id prefix '{prefix}'")
+    return rows[0]["id"]
+
+
+def _cmd_commands_list(db: MemoirsDB, args) -> int:
+    clauses = ["type = 'tool_call'", "archived_at IS NULL"]
+    params: list = []
+    if args.project:
+        clauses.append("json_extract(metadata_json, '$.project_name') = ?")
+        params.append(args.project)
+    if args.tool:
+        clauses.append("LOWER(tool_name) = LOWER(?)")
+        params.append(args.tool)
+    if args.status:
+        clauses.append("tool_status = ?")
+        params.append(args.status)
+    if args.days is not None and args.days > 0:
+        from datetime import datetime, timedelta, timezone
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=int(args.days))).isoformat()
+        clauses.append("COALESCE(json_extract(metadata_json, '$.timestamp'), created_at) >= ?")
+        params.append(cutoff)
+
+    sql = (
+        "SELECT id, tool_name, tool_status, tool_args_json, content, created_at, "
+        "       metadata_json "
+        "FROM memories WHERE " + " AND ".join(clauses) +
+        " ORDER BY COALESCE(json_extract(metadata_json, '$.timestamp'), created_at) DESC "
+        "LIMIT ?"
+    )
+    params.append(int(args.limit))
+    rows = [dict(r) for r in db.conn.execute(sql, params).fetchall()]
+
+    if args.json:
+        out = []
+        for r in rows:
+            try:
+                r["metadata"] = json.loads(r.pop("metadata_json") or "{}")
+            except (TypeError, ValueError):
+                r["metadata"] = {}
+            try:
+                r["args"] = json.loads(r.get("tool_args_json") or "{}")
+            except (TypeError, ValueError):
+                r["args"] = {}
+            out.append(r)
+        print(json.dumps(out, indent=2, ensure_ascii=False, default=str))
+        return 0
+
+    if not rows:
+        print("(no commands match)")
+        return 0
+
+    print(f"{'ts':<13} {'project':<14} {'tool':<10} {'status':<9} {'id':<14} summary")
+    print("-" * 110)
+    for r in rows:
+        try:
+            md = json.loads(r.get("metadata_json") or "{}")
+        except (TypeError, ValueError):
+            md = {}
+        proj = (md.get("project_name") or "-")[:14] if isinstance(md, dict) else "-"
+        ts = _format_tool_call_ts(r) or "-"
+        tool = (r.get("tool_name") or "?")[:10]
+        status = (r.get("tool_status") or "?")[:9]
+        summary = _summarize_tool_args(r)
+        mid = (r.get("id") or "")[:14]
+        print(f"{ts:<13} {proj:<14} {tool:<10} {status:<9} {mid:<14} {summary}")
+    return 0
+
+
+def _cmd_commands_show(db: MemoirsDB, args) -> int:
+    try:
+        mid = _resolve_tool_call_id_prefix(db, args.memory_id)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    row = db.conn.execute(
+        "SELECT id, tool_name, tool_status, tool_args_json, content, "
+        "       created_at, metadata_json "
+        "FROM memories WHERE id = ?",
+        (mid,),
+    ).fetchone()
+    if row is None:
+        print(f"error: no row for id {mid}", file=sys.stderr)
+        return 1
+    rec = dict(row)
+    try:
+        rec["metadata"] = json.loads(rec.pop("metadata_json") or "{}")
+    except (TypeError, ValueError):
+        rec["metadata"] = {}
+    try:
+        rec["args"] = json.loads(rec.get("tool_args_json") or "{}")
+    except (TypeError, ValueError):
+        rec["args"] = {}
+    if getattr(args, "json", False):
+        print(json.dumps(rec, indent=2, ensure_ascii=False, default=str))
+        return 0
+    print(f"id:        {rec['id']}")
+    print(f"tool:      {rec.get('tool_name')}")
+    print(f"status:    {rec.get('tool_status')}")
+    print(f"created:   {rec.get('created_at')}")
+    md = rec.get("metadata") or {}
+    if md:
+        print(f"project:   {md.get('project_name', '-')}")
+        print(f"cwd:       {md.get('cwd', '-')}")
+        print(f"conv:      {md.get('conversation_id', '-')}")
+        print(f"ordinal:   {md.get('message_ordinal', '-')}")
+        print(f"timestamp: {md.get('timestamp', '-')}")
+    print()
+    print("args:")
+    print(json.dumps(rec.get("args") or {}, indent=2, ensure_ascii=False))
+    print()
+    print("content:")
+    print(rec.get("content") or "")
+    return 0
+
+
+def _cmd_commands_stats(db: MemoirsDB, args) -> int:
+    clauses = ["type = 'tool_call'", "archived_at IS NULL", "tool_name IS NOT NULL"]
+    params: list = []
+    if args.project:
+        clauses.append("json_extract(metadata_json, '$.project_name') = ?")
+        params.append(args.project)
+    sql = (
+        "SELECT tool_name, "
+        "       COUNT(*) AS count, "
+        "       SUM(CASE WHEN tool_status='success' THEN 1 ELSE 0 END) AS success_count, "
+        "       SUM(CASE WHEN tool_status='error' THEN 1 ELSE 0 END) AS error_count, "
+        "       SUM(CASE WHEN tool_status='cancelled' THEN 1 ELSE 0 END) AS cancelled_count, "
+        "       MAX(created_at) AS last_at "
+        "FROM memories WHERE " + " AND ".join(clauses) +
+        " GROUP BY tool_name ORDER BY count DESC"
+    )
+    rows = [dict(r) for r in db.conn.execute(sql, params).fetchall()]
+    for r in rows:
+        c = max(1, int(r.get("count") or 0))
+        r["success_rate"] = round(float(r.get("success_count") or 0) / c, 3)
+    if getattr(args, "json", False):
+        print(json.dumps(rows, indent=2, ensure_ascii=False, default=str))
+        return 0
+    if not rows:
+        print("(no commands match)")
+        return 0
+    print(f"{'tool':<14} {'count':>6} {'success':>7} {'error':>5} {'cancel':>6} "
+          f"{'rate':>6}  last")
+    print("-" * 80)
+    for r in rows:
+        print(
+            f"{(r['tool_name'] or '')[:14]:<14} {r['count']:>6} "
+            f"{r['success_count'] or 0:>7} {r['error_count'] or 0:>5} "
+            f"{r['cancelled_count'] or 0:>6} {r['success_rate']*100:>5.1f}% "
+            f" {r.get('last_at') or '-'}"
+        )
+    return 0
+
+
+def _cmd_commands_replay(db: MemoirsDB, args) -> int:
+    try:
+        mid = _resolve_tool_call_id_prefix(db, args.memory_id)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    row = db.conn.execute(
+        "SELECT tool_name, tool_args_json FROM memories WHERE id = ?",
+        (mid,),
+    ).fetchone()
+    if row is None:
+        print(f"error: no row for id {mid}", file=sys.stderr)
+        return 1
+    name = (row["tool_name"] or "").lower()
+    try:
+        args_obj = json.loads(row["tool_args_json"] or "{}")
+    except (TypeError, ValueError):
+        args_obj = {}
+    if not isinstance(args_obj, dict):
+        args_obj = {}
+    if name in {"bash", "shell"}:
+        cmd = args_obj.get("command") or args_obj.get("cmd") or ""
+        print(cmd)
+        return 0
+    if name in {"read", "write", "edit"}:
+        path = args_obj.get("file_path") or args_obj.get("path") or ""
+        print(path)
+        return 0
+    if name == "grep":
+        pattern = args_obj.get("pattern") or ""
+        path = args_obj.get("path") or "."
+        print(f"grep -rn {json.dumps(pattern)} {path}")
+        return 0
+    if name == "glob":
+        print(args_obj.get("pattern") or "")
+        return 0
+    if name == "webfetch":
+        print(args_obj.get("url") or "")
+        return 0
+    print(json.dumps(args_obj, ensure_ascii=False))
+    return 0
+
+
+def _cmd_current(db: MemoirsDB, args) -> int:
+    """``memoirs current`` — auto-detect the latest Claude Code JSONL for the
+    current cwd, ingest it if needed, then print a resume payload."""
+    from .engine import thread_resume
+
+    jsonl = thread_resume.find_latest_jsonl_for_cwd()
+    if jsonl is None:
+        msg = (
+            "No Claude Code transcript found for the current cwd "
+            f"({os.getcwd()}). Expected a directory under "
+            "~/.claude/projects/ matching the encoded path."
+        )
+        if getattr(args, "json", False):
+            print(json.dumps({"ok": False, "reason": msg}, ensure_ascii=False))
+        else:
+            print(msg)
+        return 0  # not a hard error — the user may not be in a Claude Code project
+
+    cid = thread_resume.find_conversation_id_for_cwd(db)
+    if cid is None and not getattr(args, "no_ingest", False):
+        # Ingest the JSONL on-demand so this command works even if the user
+        # hasn't run `memoirs ingest` yet.
+        try:
+            from .ingesters.claude_code import ingest_claude_code_jsonl
+            ingest_claude_code_jsonl(jsonl, db)
+            cid = thread_resume.find_conversation_id_for_cwd(db)
+        except Exception as e:  # noqa: BLE001
+            if getattr(args, "json", False):
+                print(json.dumps(
+                    {"ok": False, "reason": f"ingest failed: {e}"},
+                    ensure_ascii=False,
+                ))
+            else:
+                print(f"ingest failed for {jsonl}: {e}")
+            return 1
+
+    if cid is None:
+        msg = f"transcript at {jsonl} did not yield a conversation_id"
+        if getattr(args, "json", False):
+            print(json.dumps({"ok": False, "reason": msg}, ensure_ascii=False))
+        else:
+            print(msg)
+        return 0
+
+    payload = thread_resume.resume_thread(db, cid)
+    payload["auto_detected"] = True
+    payload["jsonl"] = str(jsonl)
+    if getattr(args, "json", False):
+        print(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
+    else:
+        _print_resume_payload(payload)
+    return 0
+
+
+def _cmd_resume(db: MemoirsDB, args) -> int:
+    """``memoirs resume <conversation_id>`` — explicit thread resume."""
+    from .engine import thread_resume
+
+    try:
+        cid = _resolve_memory_id_prefix(db, args.conversation_id)
+    except ValueError as e:
+        print(f"error: {e}")
+        return 1
+
+    payload = thread_resume.resume_thread(
+        db, cid, generate_if_missing=not getattr(args, "no_generate", False),
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
+    else:
+        _print_resume_payload(payload)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

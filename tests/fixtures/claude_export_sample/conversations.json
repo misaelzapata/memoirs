@@ -1,0 +1,63 @@
+[
+  {
+    "uuid": "11111111-1111-1111-1111-111111111111",
+    "name": "First conversation",
+    "created_at": "2026-04-20T10:00:00Z",
+    "updated_at": "2026-04-20T10:05:00Z",
+    "account": {"uuid": "acct-aaaa"},
+    "chat_messages": [
+      {
+        "uuid": "msg-1a",
+        "sender": "human",
+        "text": "Hola Claude, ¿cómo estás?",
+        "created_at": "2026-04-20T10:00:01Z",
+        "updated_at": "2026-04-20T10:00:01Z",
+        "attachments": [],
+        "files": []
+      },
+      {
+        "uuid": "msg-1b",
+        "sender": "assistant",
+        "content": [
+          {"type": "text", "text": "¡Hola! Estoy bien, gracias por preguntar."}
+        ],
+        "created_at": "2026-04-20T10:00:05Z",
+        "updated_at": "2026-04-20T10:00:05Z",
+        "attachments": [],
+        "files": []
+      }
+    ]
+  },
+  {
+    "uuid": "22222222-2222-2222-2222-222222222222",
+    "name": "Second conversation",
+    "created_at": "2026-04-21T09:00:00Z",
+    "updated_at": "2026-04-21T09:30:00Z",
+    "account": {"uuid": "acct-aaaa"},
+    "chat_messages": [
+      {
+        "uuid": "msg-2a",
+        "sender": "human",
+        "text": "Help me debug a Python script.",
+        "created_at": "2026-04-21T09:00:01Z"
+      },
+      {
+        "uuid": "msg-2b",
+        "sender": "assistant",
+        "content": [
+          {"type": "text", "text": "Sure, paste the script and the error."},
+          {"type": "tool_use", "name": "code_search"}
+        ],
+        "created_at": "2026-04-21T09:00:05Z"
+      },
+      {
+        "uuid": "msg-2c",
+        "sender": "human",
+        "content": [
+          {"type": "text", "text": "Here it is..."}
+        ],
+        "created_at": "2026-04-21T09:01:00Z"
+      }
+    ]
+  }
+]

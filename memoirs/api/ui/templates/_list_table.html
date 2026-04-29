@@ -1,0 +1,47 @@
+<table class="w-full text-sm bg-white border border-slate-200 rounded overflow-hidden">
+    <thead class="bg-slate-100 text-slate-600">
+        <tr>
+            <th class="px-3 py-2 text-left">Type</th>
+            <th class="px-3 py-2 text-left">Content</th>
+            <th class="px-3 py-2 text-right">Score</th>
+            <th class="px-3 py-2 text-right">Imp</th>
+            <th class="px-3 py-2 text-right">Conf</th>
+            <th class="px-3 py-2 text-left">Updated</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for m in items %}
+        <tr class="border-t border-slate-100 hover:bg-slate-50">
+            <td class="px-3 py-2"><span class="pill pill-{{ m.type }}">{{ m.type }}</span></td>
+            <td class="px-3 py-2">
+                <a href="/ui/memories/{{ m.id }}" class="text-slate-900 hover:underline">
+                    {% if m.pinned %}<span title="pinned" class="text-amber-500">★</span>{% endif %}
+                    {{ m.summary }}
+                </a>
+            </td>
+            <td class="px-3 py-2 text-right tabular-nums text-slate-700">{{ "%.3f"|format(m.score or 0) }}</td>
+            <td class="px-3 py-2 text-right tabular-nums">{{ m.importance }}</td>
+            <td class="px-3 py-2 text-right tabular-nums">{{ "%.2f"|format(m.confidence or 0) }}</td>
+            <td class="px-3 py-2 text-slate-500">{{ m.updated_at[:19] if m.updated_at else "" }}</td>
+        </tr>
+    {% else %}
+        <tr><td colspan="6" class="px-3 py-6 text-center text-slate-400">no memories match</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% if pages > 1 %}
+<div class="flex items-center justify-between mt-3 text-sm text-slate-600">
+    <p>page {{ page }} / {{ pages }}</p>
+    <div class="flex gap-2">
+        {% if page > 1 %}
+        <a class="px-2 py-1 border border-slate-300 rounded hover:bg-white"
+           href="/ui/memories?type={{ type }}&q={{ q }}&page={{ page - 1 }}">&larr; prev</a>
+        {% endif %}
+        {% if page < pages %}
+        <a class="px-2 py-1 border border-slate-300 rounded hover:bg-white"
+           href="/ui/memories?type={{ type }}&q={{ q }}&page={{ page + 1 }}">next &rarr;</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

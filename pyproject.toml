@@ -1,0 +1,84 @@
+[project]
+name = "memoirs"
+version = "0.1.0"
+description = "Local memory engine: ingest chats from Claude Code / Cursor / MCP clients into a unified raw store."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+realtime = ["watchdog>=4"]
+extract = ["spacy>=3.7"]
+gemma = ["llama-cpp-python>=0.2"]
+embeddings = ["sentence-transformers>=2.7", "sqlite-vec>=0.1"]
+embeddings_fast = ["fastembed>=0.4"]
+reranker = ["sentence-transformers>=2.7"]
+clustering = ["scikit-learn>=1.4"]
+viz = ["pyvis>=0.3", "networkx>=3"]
+api = ["fastapi>=0.100", "uvicorn>=0.20", "pydantic>=2", "jinja2>=3", "python-multipart>=0.0.6"]
+privacy = ["presidio-analyzer>=2.2", "presidio-anonymizer>=2.2"]
+encryption = ["sqlcipher3-binary>=0.5"]
+otel = [
+    "opentelemetry-api>=1.25",
+    "opentelemetry-sdk>=1.25",
+    "opentelemetry-exporter-otlp>=1.25",
+]
+dev = ["pytest>=7", "httpx>=0.27", "coverage[toml]>=7"]
+all = [
+    "watchdog>=4",
+    "spacy>=3.7",
+    "llama-cpp-python>=0.2",
+    "sentence-transformers>=2.7",
+    "sqlite-vec>=0.1",
+    "fastembed>=0.4",
+    "scikit-learn>=1.4",
+    "pyvis>=0.3",
+    "networkx>=3",
+    "fastapi>=0.100",
+    "uvicorn>=0.20",
+    "pydantic>=2",
+    "jinja2>=3",
+    "python-multipart>=0.0.6",
+    "presidio-analyzer>=2.2",
+    "presidio-anonymizer>=2.2",
+    "sqlcipher3-binary>=0.5",
+    "opentelemetry-api>=1.25",
+    "opentelemetry-sdk>=1.25",
+    "opentelemetry-exporter-otlp>=1.25",
+    "coverage[toml]>=7",
+]
+
+[project.scripts]
+memoirs = "memoirs.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["memoirs"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: tests that load LLM weights or require >5s wall-clock; opt-in",
+]
+
+[tool.coverage.run]
+source = ["memoirs"]
+omit = [
+    "memoirs/__main__.py",
+    "memoirs/migrations/*",
+    "*/tests/*",
+    "memoirs/setup_helpers.py",
+]
+branch = true
+
+[tool.coverage.report]
+precision = 2
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+fail_under = 60
