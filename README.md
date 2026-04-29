@@ -1,5 +1,7 @@
 # memoirs
 
+> **memoirs**  /ˈmɛmwɑrz/  · _MEM-wahrz_ · from French *mémoires* (memories) — the durable written record an agent keeps of what it has learned.
+
 **Local-first long-term memory for AI agents.**
 
 [![tests](https://img.shields.io/badge/tests-693%20passed-brightgreen)](./tests)
