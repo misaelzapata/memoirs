@@ -147,6 +147,8 @@ def test_should_expire_low_similarity_blocks():
 
 def test_should_expire_gemma_contradictory_winner_a(monkeypatch):
     """Gemma reports contradictory + winner=A → EXPIRE neighbor."""
+    monkeypatch.delenv("MEMOIRS_CURATOR_ENABLED", raising=False)
+    monkeypatch.delenv("MEMOIRS_GEMMA_CURATOR", raising=False)
 
     def fake_resolve(a_content, b_content):
         return {
@@ -173,6 +175,8 @@ def test_should_expire_gemma_contradictory_winner_a(monkeypatch):
 
 
 def test_should_expire_gemma_winner_b_keeps_neighbor(monkeypatch):
+    monkeypatch.delenv("MEMOIRS_CURATOR_ENABLED", raising=False)
+    monkeypatch.delenv("MEMOIRS_GEMMA_CURATOR", raising=False)
     """Gemma says contradictory but neighbor wins → don't expire."""
 
     def fake_resolve(*a, **k):
@@ -310,6 +314,8 @@ def test_enrich_decision_no_neighbors_passthrough():
 
 
 def test_enrich_decision_mock_gemma_contradictory(monkeypatch):
+    monkeypatch.delenv("MEMOIRS_CURATOR_ENABLED", raising=False)
+    monkeypatch.delenv("MEMOIRS_GEMMA_CURATOR", raising=False)
     """Mock Gemma with contradictory=True → enrich_decision generates EXPIRE."""
 
     def fake_resolve(a, b):

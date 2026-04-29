@@ -194,6 +194,7 @@ def test_langmem_adapter_add_and_query_roundtrip_with_mock(monkeypatch):
 
 def test_langmem_adapter_applies_ollama_env_when_flag_on(monkeypatch):
     """With MEMOIRS_USE_OLLAMA=on the adapter mutates env BEFORE the import."""
+    pytest.importorskip("langmem", reason="adapter dep not installed in CI")
     monkeypatch.setenv("MEMOIRS_USE_OLLAMA", "on")
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -360,6 +361,7 @@ def test_llamaindex_adapter_add_and_query_roundtrip_with_mock(monkeypatch):
 
 
 def test_llamaindex_adapter_applies_ollama_env_when_flag_on(monkeypatch):
+    pytest.importorskip("llama_index", reason="adapter dep not installed in CI")
     monkeypatch.setenv("MEMOIRS_USE_OLLAMA", "on")
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -528,6 +530,7 @@ def test_memori_adapter_add_and_query_roundtrip_with_mock(monkeypatch, tmp_path)
 
 
 def test_memori_adapter_applies_ollama_env_when_flag_on(monkeypatch):
+    pytest.importorskip("memori", reason="adapter dep not installed in CI")
     monkeypatch.setenv("MEMOIRS_USE_OLLAMA", "on")
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
 
