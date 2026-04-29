@@ -40,3 +40,4 @@ models/*.gguf
 
 # OS
 .DS_Store
+.venv-fresh/

@@ -36,19 +36,62 @@ No cloud. No API keys leaving the box. SQLite + a 2 GB GGUF model — it runs on
 
 ---
 
-## Quickstart
+## Install
+
+memoirs ships three install paths. Pick one.
+
+### 1. PyPI (recommended for users)
 
 ```bash
-git clone <repo> && cd memoirs
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e '.[all]'
+# minimal: SQLite + FTS5 + heuristic curator
+pip install memoirs
 
-memoirs setup      # one-shot: deps + models + DB + MCP client config
-memoirs ingest ~/.claude/projects   # pull in past chats
+# everything except the local LLM (lighter — ~150 MB)
+pip install 'memoirs[all]'
+
+# everything + Qwen 3 4B GGUF curator + bge-reranker (~2 GB on first run)
+pip install 'memoirs[full]'
+
+memoirs setup      # one-shot: download GGUF, init DB, wire MCP into your IDEs
+```
+
+`memoirs setup` is idempotent — it auto-detects which curator backends you already have, downloads the missing ones via `huggingface-hub`, then writes MCP config snippets for Claude Code / Cursor / Continue / Cline.
+
+### 2. From source
+
+```bash
+git clone https://github.com/misaelzapata/memoirs && cd memoirs
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e '.[full,dev]'    # editable + tests + curator + reranker
+memoirs setup
+```
+
+### 3. Docker compose (zero-Python install)
+
+```bash
+git clone https://github.com/misaelzapata/memoirs && cd memoirs
+docker compose up -d
+# → API on :8283, MCP via docker exec, persistent volume in ./data
+```
+
+### Auto-start on login (Linux, optional)
+
+```bash
+bash scripts/install_systemd_user.sh    # creates user-level systemd unit
+# memoirs now auto-starts on login. status: systemctl --user status memoirs-api
+```
+
+### Verify
+
+```bash
+memoirs status
+# → 12 migrations applied · curator=qwen3 · embedding=sentence-transformers/all-MiniLM-L6-v2
+
+memoirs ingest ~/.claude/projects   # pull past chats
 memoirs ask "what did we decide about auth?"
 ```
 
-That's it. The MCP server is now wired into your IDEs.
+That's it — the MCP server is wired into your IDEs.
 
 ### As an MCP server
 

@@ -1,14 +1,41 @@
 [project]
 name = "memoirs"
 version = "0.1.0"
-description = "Local memory engine: ingest chats from Claude Code / Cursor / MCP clients into a unified raw store."
+description = "Local-first long-term memory engine for AI agents · MCP + HTTP + CLI · SQLite + sqlite-vec + FTS5"
+readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Misael Zapata", email = "misaelzapata@gmail.com" }]
+keywords = ["mcp", "memory", "llm", "agent", "rag", "sqlite", "vector-search", "claude"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Database",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/misaelzapata/memoirs"
+Repository = "https://github.com/misaelzapata/memoirs"
+Issues = "https://github.com/misaelzapata/memoirs/issues"
+Documentation = "https://github.com/misaelzapata/memoirs#readme"
 
 [project.optional-dependencies]
 realtime = ["watchdog>=4"]
 extract = ["spacy>=3.7"]
-gemma = ["llama-cpp-python>=0.2"]
+# Local LLM curator. Default backend is Qwen 3 4B (auto-detect picks
+# Qwen3 → Qwen3.5 → Qwen2.5 → Phi → Gemma based on what's installed).
+# Run ``memoirs setup`` to download the default GGUF (~2 GB).
+curator = ["llama-cpp-python>=0.2", "huggingface-hub>=0.20"]
+gemma = ["llama-cpp-python>=0.2", "huggingface-hub>=0.20"]   # legacy alias
 embeddings = ["sentence-transformers>=2.7", "sqlite-vec>=0.1"]
 embeddings_fast = ["fastembed>=0.4"]
 reranker = ["sentence-transformers>=2.7"]
@@ -22,12 +49,12 @@ otel = [
     "opentelemetry-sdk>=1.25",
     "opentelemetry-exporter-otlp>=1.25",
 ]
-dev = ["pytest>=7", "httpx>=0.27", "coverage[toml]>=7"]
+dev = ["pytest>=7", "httpx>=0.27", "coverage[toml]>=7", "ruff>=0.5"]
+# ``[all]`` covers everything except heavy LLM deps. Use ``[full]`` for
+# Qwen + cross-encoder (adds ~2 GB of weights at first run).
 all = [
     "watchdog>=4",
     "spacy>=3.7",
-    "llama-cpp-python>=0.2",
-    "sentence-transformers>=2.7",
     "sqlite-vec>=0.1",
     "fastembed>=0.4",
     "scikit-learn>=1.4",
@@ -44,7 +71,10 @@ all = [
     "opentelemetry-api>=1.25",
     "opentelemetry-sdk>=1.25",
     "opentelemetry-exporter-otlp>=1.25",
-    "coverage[toml]>=7",
+]
+full = [
+    "memoirs[all,curator]",
+    "sentence-transformers>=2.7",
 ]
 
 [project.scripts]

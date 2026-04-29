@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4">
+    <a href="/ui/memories" class="text-sm text-slate-500 hover:underline">&larr; all memories</a>
+</div>
+
+<header class="flex items-start gap-3 mb-4">
+    <span class="pill pill-{{ memory.type }}">{{ memory.type }}</span>
+    <h2 class="text-xl font-semibold">
+        {% if memory.pinned %}<span title="pinned" class="text-amber-500">★</span>{% endif %}
+        memory <code class="text-slate-500 text-sm">{{ memory.id }}</code>
+    </h2>
+</header>
+
+<section class="bg-white border border-slate-200 rounded p-4 mb-4">
+    <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Content</h3>
+    <p class="text-slate-900 leading-relaxed whitespace-pre-wrap">{{ memory.content }}</p>
+
+    <form class="mt-3"
+          hx-patch="/ui/memories/{{ memory.id }}"
+          hx-target="#edit-status"
+          hx-swap="innerHTML">
+        <details>
+            <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-700">edit content</summary>
+            <textarea name="content" class="mt-2 w-full border border-slate-300 rounded p-2 text-sm font-mono"
+                      rows="4">{{ memory.content }}</textarea>
+            <div class="flex items-center gap-3 mt-2">
+                <button class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-1.5 rounded"
+                        type="submit">save</button>
+                <span id="edit-status" class="text-xs"></span>
+            </div>
+        </details>
+    </form>
+</section>
+
+<section class="grid grid-cols-2 gap-3 mb-4">
+    <div class="bg-white border border-slate-200 rounded p-3">
+        <h4 class="text-xs uppercase text-slate-500 mb-1">Score</h4>
+        <p class="text-2xl tabular-nums">{{ "%.4f"|format(memory.score or 0) }}</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded p-3">
+        <h4 class="text-xs uppercase text-slate-500 mb-1">Importance · Confidence</h4>
+        <p class="text-2xl tabular-nums">{{ memory.importance }} · {{ "%.2f"|format(memory.confidence or 0) }}</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded p-3">
+        <h4 class="text-xs uppercase text-slate-500 mb-1">Validity</h4>
+        <p class="text-sm">
+            from <code class="text-slate-700">{{ memory.valid_from or memory.created_at }}</code><br>
+            to <code class="text-slate-700">{{ memory.valid_to or "current" }}</code>
+        </p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded p-3">
+        <h4 class="text-xs uppercase text-slate-500 mb-1">Usage</h4>
+        <p class="text-sm">
+            count {{ memory.usage_count or 0 }}
+            · last_used {{ memory.last_used_at or "—" }}
+            · user_signal {{ "%.2f"|format(memory.user_signal or 0) }}
+        </p>
+    </div>
+</section>
+
+<section class="flex flex-wrap gap-2 mb-4">
+    <button class="bg-amber-500 hover:bg-amber-600 text-white text-sm px-3 py-1.5 rounded"
+            hx-post="/ui/memories/{{ memory.id }}/pin"
+            hx-target="#actions-status"
+            hx-swap="innerHTML">
+        ★ pin (no decay)
+    </button>
+    <button class="bg-rose-600 hover:bg-rose-700 text-white text-sm px-3 py-1.5 rounded"
+            hx-post="/ui/memories/{{ memory.id }}/forget"
+            hx-confirm="Soft-delete this memory?"
+            hx-target="#actions-status"
+            hx-swap="innerHTML">
+        forget (archive)
+    </button>
+    <span id="actions-status" class="text-sm self-center"></span>
+</section>
+
+{% if entities %}
+<section class="bg-white border border-slate-200 rounded p-4 mb-4">
+    <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Entities</h3>
+    <ul class="flex flex-wrap gap-2">
+    {% for e in entities %}
+        <li class="bg-slate-100 text-slate-700 text-xs px-2 py-1 rounded">
+            {{ e.name }} <span class="text-slate-400">{{ e.type or "" }}</span>
+        </li>
+    {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<section class="bg-white border border-slate-200 rounded p-4 mb-4">
+    <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Zettelkasten links</h3>
+    <div hx-get="/ui/memories/{{ memory.id }}/links" hx-trigger="load" hx-swap="innerHTML">
+        <p class="text-xs text-slate-400">loading neighbors…</p>
+    </div>
+</section>
+
+<section class="bg-white border border-slate-200 rounded p-4 mb-4">
+    <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Provenance</h3>
+    <div hx-get="/ui/memories/{{ memory.id }}/provenance" hx-trigger="load" hx-swap="innerHTML">
+        <p class="text-xs text-slate-400">tracing source → messages → candidate → memory…</p>
+    </div>
+</section>
+{% endblock %}

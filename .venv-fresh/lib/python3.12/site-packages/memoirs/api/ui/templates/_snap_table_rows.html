@@ -1,0 +1,21 @@
+{% for s in snapshots %}
+<tr class="border-t border-slate-100 hover:bg-slate-50">
+    <td class="px-5 py-3 text-slate-600 font-mono text-xs">{{ s.created_at }}</td>
+    <td class="px-5 py-3 font-medium">{{ s.name }}</td>
+    <td class="px-5 py-3 text-right tabular-nums">{{ s.memory_count }}</td>
+    <td class="px-5 py-3 text-right tabular-nums text-slate-500">{{ "{:.1f}".format(s.size_bytes / 1024 / 1024) }} <span class="text-xs">MB</span></td>
+    <td class="px-5 py-3 text-right">
+        <a class="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer mr-4"
+           hx-get="/ui/snapshots/diff?a={{ s.path }}&b=live" hx-target="#snap-diff" hx-swap="innerHTML">
+            <i class="lucide lucide-git-compare text-[14px]"></i>diff vs live
+        </a>
+        <a class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-800 hover:underline cursor-pointer"
+           hx-post="/ui/snapshots/restore?path={{ s.path }}" hx-target="#snap-msg" hx-swap="innerHTML"
+           hx-confirm="Restore the live DB from snapshot &quot;{{ s.name }}&quot;? A safety snapshot of the current state will be created first.">
+            <i class="lucide lucide-undo-2 text-[14px]"></i>restore
+        </a>
+    </td>
+</tr>
+{% else %}
+<tr><td colspan="5" class="px-5 py-12 text-center text-slate-400 italic">No snapshots yet — create your first one above.</td></tr>
+{% endfor %}

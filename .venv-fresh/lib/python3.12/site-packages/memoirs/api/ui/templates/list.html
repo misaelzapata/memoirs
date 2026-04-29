@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flex items-baseline justify-between mb-4">
+    <h2 class="text-2xl font-semibold">Memorias</h2>
+    <p class="text-sm text-slate-500">{{ total }} total</p>
+</div>
+
+<form class="bg-white border border-slate-200 rounded p-3 flex flex-wrap gap-3 items-end mb-4"
+      hx-get="/ui/memories"
+      hx-target="#mem-list"
+      hx-trigger="submit, change from:select, keyup changed delay:300ms from:input[name='q']"
+      hx-push-url="true">
+    <div>
+        <label class="block text-xs text-slate-500 mb-1">Type</label>
+        <select name="type" class="border border-slate-300 rounded px-2 py-1 text-sm">
+            <option value="">all types</option>
+            {% for t in types %}
+                <option value="{{ t }}" {% if t == type %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="flex-1 min-w-[200px]">
+        <label class="block text-xs text-slate-500 mb-1">Search content</label>
+        <input type="text" name="q" value="{{ q }}"
+               placeholder="substring, case-insensitive…"
+               class="w-full border border-slate-300 rounded px-2 py-1 text-sm">
+    </div>
+    <button type="submit"
+            class="bg-slate-900 hover:bg-slate-700 text-white text-sm px-3 py-1.5 rounded">
+        Filter
+    </button>
+</form>
+
+<div id="mem-list">
+    {% include "_list_table.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="flex items-end justify-between mb-6">
+    <div>
+        <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2">
+            <i class="lucide lucide-layout-dashboard text-[22px] text-slate-400"></i>Dashboard
+        </h2>
+        <p class="text-xs text-slate-400 font-mono mt-1">{{ db_path }}</p>
+    </div>
+    <div class="flex items-center gap-2">
+        <a href="/ui/search"
+           class="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm hover:bg-slate-50">
+            <i class="lucide lucide-search text-[15px]"></i>Search
+        </a>
+        <a href="/ui/snapshots"
+           class="inline-flex items-center gap-2 px-3 py-2 bg-slate-900 hover:bg-slate-700 text-white rounded-lg text-sm">
+            <i class="lucide lucide-camera text-[15px]"></i>Snapshots
+        </a>
+    </div>
+</header>
+
+<section class="grid grid-cols-4 gap-4 mb-6">
+    <div class="stat-card">
+        <div class="stat-label">Active memories</div>
+        <div class="stat-num">{{ "{:,}".format(total_active) }}</div>
+        <div class="stat-help">+ {{ archived_n }} archived</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Provenance attribution</div>
+        <div class="stat-num">{{ "{:,}".format(provenance_filled) }}<span class="text-base text-slate-400 font-normal">/{{ total_active }}</span></div>
+        <div class="stat-help">
+            {% for actor, n in actor_counts %}<code class="text-[11px] mr-2">{{ actor }}={{ n }}</code>{% endfor %}
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Procedural policies</div>
+        <div class="stat-num">{{ procedural_top|length }}</div>
+        <div class="stat-help">Always-on, surfaced as <code>system_instructions</code>.</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Snapshots saved</div>
+        <div class="stat-num">{{ snapshots|length }}</div>
+        <div class="stat-help">{% if snapshots %}Latest: {{ snapshots[0].created_at[:10] }}{% else %}none yet{% endif %}</div>
+    </div>
+</section>
+
+<section class="card mb-6">
+    <header class="card-header flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <i class="lucide lucide-pie-chart"></i>Memory types
+        </h3>
+        <a href="/ui/memories" class="text-xs text-indigo-600 hover:underline flex items-center gap-1">
+            browse all<i class="lucide lucide-arrow-right text-[12px]"></i>
+        </a>
+    </header>
+    <div class="card-body grid grid-cols-3 gap-6 items-center">
+        <div class="col-span-1">
+            <canvas id="typeChart" height="220"></canvas>
+        </div>
+        <ul class="col-span-2 space-y-1.5">
+            {% for t, n in type_counts %}
+            <li>
+                <a href="/ui/memories?type={{ t }}"
+                   class="flex items-center justify-between text-sm hover:bg-slate-50 px-2 py-1 rounded">
+                    <span class="flex items-center gap-2">
+                        <span class="pill pill-{{ t }}">{{ t }}</span>
+                    </span>
+                    <span class="tabular-nums text-slate-500">{{ "{:,}".format(n) }}</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</section>
+<script>
+(function() {
+    const labels = [{% for t, n in type_counts %}"{{ t }}"{% if not loop.last %},{% endif %}{% endfor %}];
+    const data   = [{% for t, n in type_counts %}{{ n }}{% if not loop.last %},{% endif %}{% endfor %}];
+    const palette = {
+        preference: '#4338ca', fact: '#0e7490', project: '#92400e',
+        task: '#854d0e', decision: '#166534', style: '#86198f',
+        credential_pointer: '#991b1b', procedural: '#3730a3',
+        tool_call: '#44403c'
+    };
+    const ctx = document.getElementById('typeChart');
+    if (ctx) {
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: labels.map(l => palette[l] || '#94a3b8'),
+                    borderWidth: 2, borderColor: '#ffffff',
+                }],
+            },
+            options: {
+                responsive: true,
+                cutout: '62%',
+                animation: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => {
+                                const total = ctx.dataset.data.reduce((a,b)=>a+b, 0);
+                                const pct = ((ctx.parsed / total) * 100).toFixed(1);
+                                return `${ctx.label}: ${ctx.parsed.toLocaleString()} (${pct}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+})();
+</script>
+
+{% if procedural_top %}
+<section class="card mb-6 border-indigo-200 bg-indigo-50/30">
+    <header class="card-header bg-indigo-50/60 border-indigo-100 flex items-center gap-2">
+        <i class="lucide lucide-zap text-indigo-600"></i>
+        <h3 class="text-sm font-semibold text-indigo-900">Procedural memories</h3>
+        <span class="text-xs text-indigo-500">LangMem-style — agent self-instructions, surfaced as <code>system_instructions</code> regardless of query match.</span>
+    </header>
+    <ul class="card-body py-3 divide-y divide-indigo-100/60">
+        {% for m in procedural_top %}
+        <li class="py-2 flex items-baseline gap-3">
+            <span class="text-xs text-indigo-400 font-mono">★{{ m.importance }}</span>
+            <a href="/ui/memories/{{ m.id }}" class="flex-1 hover:underline text-slate-700">{{ m.content }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+<section class="card mb-6">
+    <header class="card-header flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <i class="lucide lucide-clock"></i>Recent
+        </h3>
+        <a href="/ui/timeline" class="text-xs text-indigo-600 hover:underline flex items-center gap-1">
+            timeline<i class="lucide lucide-arrow-right text-[12px]"></i>
+        </a>
+    </header>
+    <ul class="divide-y divide-slate-100">
+        {% for r in recent %}
+        <li class="px-5 py-2.5 text-sm flex items-baseline gap-3 hover:bg-slate-50">
+            <span class="pill pill-{{ r.type }}">{{ r.type }}</span>
+            <a href="/ui/memories/{{ r.id }}" class="flex-1 hover:underline text-slate-700">{{ r.content[:140] }}{% if r.content|length > 140 %}…{% endif %}</a>
+            <span class="text-xs text-slate-400 font-mono">{{ r.created_at[:19] }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+
+{% if snapshots %}
+<section class="card">
+    <header class="card-header flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <i class="lucide lucide-camera"></i>Recent snapshots
+        </h3>
+        <a href="/ui/snapshots" class="text-xs text-indigo-600 hover:underline flex items-center gap-1">
+            manage<i class="lucide lucide-arrow-right text-[12px]"></i>
+        </a>
+    </header>
+    <ul class="divide-y divide-slate-100">
+        {% for s in snapshots %}
+        <li class="px-5 py-2.5 text-sm flex items-baseline gap-3 hover:bg-slate-50">
+            <span class="text-xs text-slate-400 font-mono">{{ s.created_at }}</span>
+            <span class="font-medium">{{ s.name }}</span>
+            <span class="text-slate-500 tabular-nums">{{ "{:,}".format(s.memory_count) }} memorias</span>
+            <span class="text-xs text-slate-400 ml-auto tabular-nums">{{ "{:.1f}".format(s.size_bytes / 1024 / 1024) }} MB</span>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+{% endblock %}

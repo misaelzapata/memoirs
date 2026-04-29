@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-4">
+    <a href="/ui/conflicts" class="text-sm text-slate-500 hover:underline">&larr; all conflicts</a>
+</div>
+
+<header class="flex items-center gap-3 mb-4">
+    <h2 class="text-xl font-semibold">Conflict <code class="text-slate-500 text-sm">#{{ conflict.id }}</code></h2>
+    <span class="text-xs font-mono text-slate-700 bg-slate-100 px-2 py-1 rounded">{{ conflict.status }}</span>
+    {% if conflict.similarity is not none %}
+        <span class="text-xs text-slate-500">sim={{ "%.3f"|format(conflict.similarity) }}</span>
+    {% endif %}
+    {% if conflict.detector %}
+        <span class="text-xs text-slate-500">via {{ conflict.detector }}</span>
+    {% endif %}
+</header>
+
+{% if conflict.reason %}
+<section class="bg-amber-50 border border-amber-200 text-amber-900 rounded p-3 mb-4 text-sm">
+    <strong class="font-semibold">Detector reason:</strong> {{ conflict.reason }}
+</section>
+{% endif %}
+
+<section class="grid grid-cols-2 gap-4 mb-4">
+    <div class="bg-white border border-slate-200 rounded p-4">
+        <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+            Memory A
+            {% if conflict.a_type %}<span class="pill pill-{{ conflict.a_type }}">{{ conflict.a_type }}</span>{% endif %}
+        </h3>
+        <p class="text-xs text-slate-400 font-mono mb-2">
+            <a href="/ui/memories/{{ conflict.memory_a_id }}" class="hover:underline">{{ conflict.memory_a_id }}</a>
+            {% if conflict.a_archived_at %}<span class="text-rose-600 ml-1">archived</span>{% endif %}
+        </p>
+        <p class="text-slate-900 leading-relaxed whitespace-pre-wrap text-sm">{{ conflict.a_content or "" }}</p>
+    </div>
+    <div class="bg-white border border-slate-200 rounded p-4">
+        <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">
+            Memory B
+            {% if conflict.b_type %}<span class="pill pill-{{ conflict.b_type }}">{{ conflict.b_type }}</span>{% endif %}
+        </h3>
+        <p class="text-xs text-slate-400 font-mono mb-2">
+            <a href="/ui/memories/{{ conflict.memory_b_id }}" class="hover:underline">{{ conflict.memory_b_id }}</a>
+            {% if conflict.b_archived_at %}<span class="text-rose-600 ml-1">archived</span>{% endif %}
+        </p>
+        <p class="text-slate-900 leading-relaxed whitespace-pre-wrap text-sm">{{ conflict.b_content or "" }}</p>
+    </div>
+</section>
+
+<section class="bg-white border border-slate-200 rounded p-4 mb-4 overflow-x-auto">
+    <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Diff</h3>
+    <div class="text-xs font-mono">
+        {{ diff_html | safe }}
+    </div>
+</section>
+
+{% if conflict.status == 'pending' %}
+<section class="bg-white border border-slate-200 rounded p-4 mb-4">
+    <h3 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Resolve</h3>
+    <form hx-post="/ui/conflicts/{{ conflict.id }}/resolve"
+          hx-target="#resolve-status"
+          hx-swap="innerHTML"
+          class="flex flex-col gap-3">
+        <div>
+            <label class="block text-xs text-slate-500 mb-1">Action</label>
+            <select name="action" class="border border-slate-300 rounded px-2 py-1 text-sm">
+                {% for a in actions %}
+                    <option value="{{ a }}">{{ a }}</option>
+                {% endfor %}
+            </select>
+            <p class="text-xs text-slate-400 mt-1">
+                keep_a archives B · keep_b archives A · keep_both leaves both ·
+                merge synthesises a new memoria · dismiss closes the row
+            </p>
+        </div>
+        <div>
+            <label class="block text-xs text-slate-500 mb-1">Notes (optional)</label>
+            <textarea name="notes" rows="2"
+                      class="w-full border border-slate-300 rounded px-2 py-1 text-sm font-mono"
+                      placeholder="why this resolution?"></textarea>
+        </div>
+        <div class="flex items-center gap-3">
+            <button type="submit"
+                    class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-1.5 rounded">
+                Apply
+            </button>
+            <span id="resolve-status" class="text-sm"></span>
+        </div>
+    </form>
+</section>
+{% else %}
+<section class="bg-slate-100 border border-slate-200 rounded p-4 mb-4 text-sm text-slate-700">
+    Already resolved as <strong>{{ conflict.status }}</strong>
+    {% if conflict.resolved_at %}at {{ conflict.resolved_at[:19] }}{% endif %}.
+    {% if conflict.resolution_notes %}
+        <p class="mt-1 text-xs font-mono text-slate-600">{{ conflict.resolution_notes }}</p>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

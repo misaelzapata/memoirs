@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="flex items-start justify-between mb-6">
+    <div>
+        <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">
+            <a href="/" class="hover:text-slate-900">Dashboard</a>
+            <span class="text-slate-300">/</span>
+            <span>Snapshots</span>
+        </div>
+        <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2">
+            <i class="lucide lucide-camera text-[22px] text-slate-400"></i>Point-in-time snapshots
+        </h2>
+        <p class="text-sm text-slate-500 mt-1 max-w-3xl">
+            Atomic backup files of the live database. Use them to inspect what changed since a moment in time, or to roll the engine back to a past state.
+        </p>
+    </div>
+    <form hx-post="/ui/snapshots/create" hx-target="#snap-tbody" hx-swap="innerHTML"
+          class="flex items-end gap-2">
+        <div>
+            <label class="stat-label block mb-1.5" for="snap-name">Label</label>
+            <input id="snap-name" name="name" type="text" placeholder="before-cleanup"
+                   class="border border-slate-300 rounded-lg px-3 py-2 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-slate-900">
+        </div>
+        <button class="bg-slate-900 hover:bg-slate-700 text-white text-sm px-4 py-2 rounded-lg flex items-center gap-2"
+                type="submit">
+            <i class="lucide lucide-camera"></i>Create snapshot
+        </button>
+    </form>
+</header>
+
+<section class="grid grid-cols-4 gap-4 mb-6">
+    <div class="stat-card">
+        <div class="stat-label">Snapshots</div>
+        <div class="stat-num">{{ snapshots|length }}</div>
+        <div class="stat-help">Newest first; oldest pruned per <code>MEMOIRS_SNAPSHOT_KEEP</code>.</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Latest</div>
+        <div class="stat-num">{% if snapshots %}{{ snapshots[0].created_at[:10] }}{% else %}—{% endif %}</div>
+        <div class="stat-help">{% if snapshots %}{{ snapshots[0].name }}{% else %}none yet{% endif %}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Total size</div>
+        <div class="stat-num">{{ ((snapshots|sum(attribute='size_bytes', start=0)) // 1024 // 1024) }}<span class="text-base text-slate-400 font-normal"> MB</span></div>
+        <div class="stat-help">All snapshot files on disk.</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Auto-cadence</div>
+        <div class="stat-num">{{ auto_cadence|default("off") }}</div>
+        <div class="stat-help">via <code>MEMOIRS_AUTO_SNAPSHOT</code> · keep <code>{{ keep|default(10) }}</code></div>
+    </div>
+</section>
+
+<section class="card mb-6 overflow-hidden">
+    <header class="card-header flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <i class="lucide lucide-list"></i>Saved snapshots
+        </h3>
+        <span class="text-xs text-slate-400 font-mono">{{ db_path }}</span>
+    </header>
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+            <thead class="bg-slate-50 text-slate-500 text-[11px] uppercase tracking-wider">
+                <tr>
+                    <th class="text-left px-5 py-2.5">Created</th>
+                    <th class="text-left px-5 py-2.5">Label</th>
+                    <th class="text-right px-5 py-2.5">Memorias</th>
+                    <th class="text-right px-5 py-2.5">Size</th>
+                    <th class="text-right px-5 py-2.5">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="snap-tbody">
+                {% include "_snap_table_rows.html" %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="mb-6">
+    <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-2 mb-3">
+        <i class="lucide lucide-git-compare"></i>Diff result
+    </h3>
+    <div id="snap-diff" class="text-sm text-slate-400 italic px-4 py-6 border border-dashed border-slate-200 rounded-lg bg-white/50 text-center">
+        Click <strong>diff vs live</strong> on any snapshot above to compare.
+    </div>
+</section>
+
+<section>
+    <div id="snap-msg"></div>
+</section>
+{% endblock %}

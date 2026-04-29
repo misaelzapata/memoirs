@@ -294,10 +294,19 @@ def test_graph_no_seed_returns_top_n(client: TestClient):
     assert {"mem_alpha", "mem_beta", "mem_gamma"} <= ids
 
 
-def test_index_redirects_to_memories(client: TestClient):
+def test_index_serves_dashboard(client: TestClient):
+    """``/ui`` (and ``/``) now render the dashboard directly — no redirect.
+
+    The dashboard exposes corpus stats, the doughnut chart of memory types,
+    procedural memories and the most recent items.
+    """
     r = client.get("/ui", follow_redirects=False)
-    assert r.status_code in (301, 302, 303, 307, 308)
-    assert "/ui/memories" in r.headers.get("location", "")
+    assert r.status_code == 200
+    body = r.text
+    # Must be the dashboard, not memories list.
+    assert "Dashboard" in body
+    assert "Active memories" in body
+    assert "Memory types" in body
 
 
 def test_search_page_renders(client: TestClient):
