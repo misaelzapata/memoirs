@@ -49,8 +49,13 @@ jobs:
           pip install --upgrade build
           python -m build
 
-      - name: Upload artifacts to the release
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "memoirs ${GITHUB_REF_NAME}" \
+              --generate-notes
+          fi
           gh release upload "${GITHUB_REF_NAME}" dist/*.whl dist/*.tar.gz --clobber
