@@ -439,13 +439,16 @@ Full list in [`docs/configuration.md`](docs/configuration.md).
 
 ## Comparison
 
-|  | Local-first | Hybrid retrieval | Multi-hop graph | Temporal queries | Native MCP | Auto-curate | Eval harness |
+|  | Local-first | Hybrid retrieval | Multi-hop bridge | Temporal queries | Native MCP | Auto-curate | Eval harness |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| memoirs | ✅ | ✅ | ✅ PPR | ✅ bi-temporal | ✅ 22 tools | ✅ Qwen / Gemma / Phi | ✅ |
-| Vector store + LangChain | ⚠️ | ⚠️ ad hoc | ❌ | ❌ | ⚠️ wrappers | ❌ DIY | ❌ |
-| Cloud SaaS memory APIs | ❌ | ✅ | varies | partial | ⚠️ wrappers | ✅ | partial |
-| KG-first systems | ⚠️ | partial | ✅ | ✅ episodic | partial | partial | partial |
-| Code-IDE memory plugins | ✅ | ❌ | ❌ | ❌ | ✅ | rules-only | ❌ |
+| **memoirs**     | ✅ SQLite        | ✅ BM25+dense+RRF       | ✅ PRF + PPR              | ✅ bi-temporal `as_of=t` | ✅ 29 tools | ✅ Qwen 3 / Phi / Gemma | ✅ LongMemEval, LoCoMo, synthetic |
+| **Mem0**        | ⚠️ SaaS-default  | ✅                       | ❌                         | partial                   | ⚠️ wrapper  | ✅ OpenAI/Anthropic       | ⚠️ in-house only |
+| **Cognee**      | ⚠️ Postgres      | ✅                       | ✅ ontology graph          | ❌                         | ❌           | ✅ LiteLLM                | ⚠️ in-house |
+| **Letta** (MemGPT) | ⚠️ Postgres   | ✅                       | ❌                         | ❌                         | ⚠️ wrapper  | ✅ OpenAI                  | partial |
+| **Zep / Graphiti** | ❌ SaaS       | ✅                       | ✅ entity graph            | ✅                         | ⚠️ wrapper  | ✅ OpenAI                  | ✅ DMR + LongMemEval |
+| **LangMem**     | ✅ in-process    | ⚠️ ad hoc                | ❌                         | ❌                         | ⚠️ wrapper  | ✅ procedural             | ❌ |
+| **LlamaIndex**  | ✅ in-process    | ✅                       | ⚠️ via plugins             | ❌                         | ⚠️ wrapper  | ❌ DIY                    | ❌ |
+| **Memori**      | ✅ SQLite        | ✅                       | ❌                         | ❌                         | ❌           | ✅ heuristic               | ❌ |
 
 ---
 
@@ -492,14 +495,14 @@ Built against the seeded demo DB (`scripts/seed_demo_db.py`) — 51 memorias spa
 
 | | |
 |---|---|
-| **Dashboard** — corpus stats + doughnut of memory types + procedural policies | ![dashboard](docs/screenshots/dashboard.png) |
-| **Memories** — full list with type pills + provenance | ![memories](docs/screenshots/memories.png) |
-| **Procedural** — `?type=procedural` filter | ![procedural](docs/screenshots/memories-procedural.png) |
-| **Search** — BM25 + dense + RRF retrieval | ![search](docs/screenshots/search.png) |
-| **Timeline** — bi-temporal view, filter by type | ![timeline](docs/screenshots/timeline.png) |
-| **Conflicts** — semantic dups across types | ![conflicts](docs/screenshots/conflicts.png) |
-| **Snapshots** — list + create + auto-cadence stat | ![snapshots](docs/screenshots/snapshots.png) |
-| **Snapshot diff** — side-by-side, added/removed/changed in colored cards | ![snapshot-diff](docs/screenshots/snapshots-diff.png) |
+| **Dashboard** — corpus stats + doughnut of memory types + procedural policies | ![dashboard](https://raw.githubusercontent.com/misaelzapata/memoirs/main/docs/screenshots/dashboard.png) |
+| **Memories** — full list with type pills + provenance | ![memories](https://raw.githubusercontent.com/misaelzapata/memoirs/main/docs/screenshots/memories.png) |
+| **Procedural** — `?type=procedural` filter | ![procedural](https://raw.githubusercontent.com/misaelzapata/memoirs/main/docs/screenshots/memories-procedural.png) |
+| **Search** — BM25 + dense + RRF retrieval | ![search](https://raw.githubusercontent.com/misaelzapata/memoirs/main/docs/screenshots/search.png) |
+| **Timeline** — bi-temporal view, filter by type | ![timeline](https://raw.githubusercontent.com/misaelzapata/memoirs/main/docs/screenshots/timeline.png) |
+| **Conflicts** — semantic dups across types | ![conflicts](https://raw.githubusercontent.com/misaelzapata/memoirs/main/docs/screenshots/conflicts.png) |
+| **Snapshots** — list + create + auto-cadence stat | ![snapshots](https://raw.githubusercontent.com/misaelzapata/memoirs/main/docs/screenshots/snapshots.png) |
+| **Snapshot diff** — side-by-side, added/removed/changed in colored cards | ![snapshot-diff](https://raw.githubusercontent.com/misaelzapata/memoirs/main/docs/screenshots/snapshots-diff.png) |
 
 To regenerate:
 
